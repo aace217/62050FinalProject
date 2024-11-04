@@ -7,6 +7,7 @@ module bpm(
     input wire rst_in,
     input wire clk_camera_in,
     input wire valid_override_in, // button on the board
+    input wire measure_in,
     output logic [7:0] bpm_out
 )
     logic [30:0] cycle_counter;
