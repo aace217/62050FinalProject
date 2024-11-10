@@ -35,7 +35,6 @@ always_ff @(posedge clk_camera_in)begin
                 hit_counter <= hit_counter + 1;
             end
         end
-        // implict else bpm_out <= bpm_out
     end
 
 end
