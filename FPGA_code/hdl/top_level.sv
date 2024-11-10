@@ -171,7 +171,7 @@ assign ss1_c = ss_c; //same as above but for lower four digits!
     .x_in(camera_hcount), 
     .y_in(camera_vcount),
     .valid_in(mask), //aka threshold
-    .tabulate_in((nf_hdmi_pipe[7])),
+    .tabulate_in((nf_hdmi_pipe[7])), // need to change
     .x_out(x_com_calc),
     .y_out(y_com_calc),
     .valid_out(new_com)
