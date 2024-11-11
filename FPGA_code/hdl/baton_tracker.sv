@@ -26,7 +26,7 @@ always_ff @(posedge clk_camera_in) begin
         current_derivative <= 0;
         old_y <= 0;
         delta_t <= 0;
-    end else begin
+    end else if (measure_in) begin
         // implementation of the derivative algorithm
         old_y <= y_com_in;
         old_derivative <= y_diff;
