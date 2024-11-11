@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Vivado
+*.rpt
+*.dcp
+
 # C extensions
 *.so
 
