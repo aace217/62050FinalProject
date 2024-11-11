@@ -134,10 +134,10 @@ logic mask; //Whether or not thresholded pixel is 1 or 0
 
 // hardcoding pink color detection 
 assign lower_threshold = 8'hA0;
-assign lower_threshold = 8'hF0;
+assign upper_threshold = 8'hF0;
 
 // hardcoding cr channel, no channel_select module!
-logic [7:0] selected_channel;
+logic [7:0] cr_channel;
 logic [7:0] y_channel;
 assign cr_channel = {!cr_full[7],cr_full[6:0]}; 
 assign y_channel = y_full[7:0];
@@ -182,28 +182,33 @@ end
 
 // Center of mass_________________________________________________________________________________
 
-  center_of_mass com_m(
-    .clk_in(clk_camera),
-    .rst_in(sys_rst_camera),
-    .x_in(camera_hcount), 
-    .y_in(camera_vcount),
-    .valid_in(mask), //aka threshold
-    .tabulate_in(camera_hcount==1279 && camera_vcount==719), // need to change
-    .x_out(x_com_calc),
-    .y_out(y_com_calc),
-    .valid_out(new_com)
-  );
-  //grab logic for above
-  //update center of mass x_com, y_com based on new_com signal
-  always_ff @(posedge clk_camera)begin
-    if (sys_rst_pixel)begin
-      x_com <= 0;
-      y_com <= 0;
-    end if(new_com)begin
-      x_com <= x_com_calc;
-      y_com <= y_com_calc;
-    end
-  end
+   logic [10:0] x_com, x_com_calc; //long term x_com and output from module, resp
+   logic [9:0] y_com, y_com_calc; //long term y_com and output from module, resp
+   logic new_com; //used to know when to update x_com and y_com ...
+ 
+
+   center_of_mass com_m(
+      .clk_in(clk_camera),
+      .rst_in(sys_rst_camera),
+      .x_in(camera_hcount), 
+      .y_in(camera_vcount),
+      .valid_in(mask), //aka threshold
+      .tabulate_in(camera_hcount==1279 && camera_vcount==719), // need to change
+      .x_out(x_com_calc),
+      .y_out(y_com_calc),
+      .valid_out(new_com)
+   );
+   //grab logic for above
+   //update center of mass x_com, y_com based on new_com signal
+   always_ff @(posedge clk_camera)begin
+      if (sys_rst_pixel)begin
+         x_com <= 0;
+         y_com <= 0;
+      end if(new_com)begin
+         x_com <= x_com_calc;
+         y_com <= y_com_calc;
+      end
+   end
 
 // Baton tracker & BPM_________________________________________________________________________________
 
@@ -294,9 +299,9 @@ end
    .data_ready_out(midi_data_ready)
    );
 
-   always_ff @(posedge @clk_camera)begin
-      if(midi_data_ready)begin
-         measured_val <= {7'b0,midi_msg_type},{4'b0,channel_out},received_note_out,velocity_out};
+   always_ff @(posedge clk_camera)begin
+      if (midi_data_ready) begin
+         measured_val <= {{7'b0,midi_msg_type},{4'b0,channel_out},received_note_out,velocity_out};
       end
    end
 // seven segment for debugging
@@ -335,6 +340,8 @@ end
    // and then some sort of bram to get sound wave from input note note_pitch
    // sample it based off note_octave, put into sound_wave
 
+   logic spk_out;
+
    pwm audio_out
    (.clk_in(clk_camera),
    .rst_in(sys_rst_camera),
@@ -347,6 +354,9 @@ end
    assign spkr = spk_out;
 
 // Staff Creation & Image Sprite_________________________________________________________________________________
+
+   logic [1:0] staff_pixel;
+   logic staff_val;
 
    staff_creation my_staff 
    ( .hcount(camera_hcount),
@@ -398,8 +408,8 @@ logic good_addrb; //used to indicate within valid frame for scaling
 
 always_ff @(posedge clk_camera)begin
    // addra logic
-   if (camera_vcount[1:0] == 0 && camera_hcount[1:0] == 0 && staff_valid) begin // every 4 addresses are "valid" for 4x downscaling
-      valid_camera_mem <= staff_valid;
+   if (camera_vcount[1:0] == 0 && camera_hcount[1:0] == 0 && staff_val) begin // every 4 addresses are "valid" for 4x downscaling
+      valid_camera_mem <= staff_val;
       addra <= {5'b0, (camera_vcount>>2)}*320 + {4'b0,(camera_hcount>>2)};
       camera_mem <= staff_pixel;
    end else begin
@@ -429,80 +439,79 @@ blk_mem_gen_0 frame_buffer (
 
 // HDMI Video Out_________________________________________________________________________________
 
-// Video Mux: select from the different display modes based on switch values
-//used with switches for display selections
-logic [1:0] display_choice;
-logic [1:0] target_choice;
+   // Video Mux: select from the different display modes based on switch values
+   //used with switches for display selections
+   logic [1:0] display_choice;
+   logic [1:0] target_choice;
 
-assign display_choice = sw[4];
-
-
-video_mux mvm(
-   .bg_in(display_choice), //choose background
-   .camera_pixel_in({cam_red, cam_green, cam_blue}), //TODO: needs (PS2)
-   .staff_pixel_in(staff_pixel), //TODO: needs (PS2)
-   .camera_y_in(y_channel), //luminance TODO: needs (PS6)
-   .channel_in(cr_channel), //current channel being drawn TODO: needs (PS5)
-   .thresholded_pixel_in(mask), //one bit mask signal TODO: needs (PS4)
-   .crosshair_in({ch_red, ch_green, ch_blue}), //TODO: needs (PS8)
-   .pixel_out({red,green,blue}) //output to tmds
-);
-
-// HDMI Output: just like before!
-
-logic [9:0] tmds_10b [0:2]; //output of each TMDS encoder!
-logic       tmds_signal [2:0]; //output of each TMDS serializer!
-
-//three tmds_encoders (blue, green, red)
-//note green should have no control signal like red
-//the blue channel DOES carry the two sync signals:
-//  * control_in[0] = horizontal sync signal
-//  * control_in[1] = vertical sync signal
-
-tmds_encoder tmds_red(
-      .clk_in(clk_pixel),
-      .rst_in(sys_rst_pixel),
-      .data_in(red),
-      .control_in(2'b0),
-      .ve_in(active_draw_hdmi_pipe[7]),
-      .tmds_out(tmds_10b[2]));
-
-tmds_encoder tmds_green(
-      .clk_in(clk_pixel),
-      .rst_in(sys_rst_pixel),
-      .data_in(green),
-      .control_in(2'b0),
-      .ve_in(active_draw_hdmi_pipe[7]),
-      .tmds_out(tmds_10b[1]));
-
-tmds_encoder tmds_blue(
-      .clk_in(clk_pixel),
-      .rst_in(sys_rst_pixel),
-      .data_in(blue),
-      .control_in({vsync_hdmi_pipe[7],hsync_hdmi_pipe[7]}),
-      .ve_in(active_draw_hdmi_pipe[7]),
-      .tmds_out(tmds_10b[0]));
+   assign display_choice = sw[4];
+   logic [7:0]          red,green,blue;
 
 
-//three tmds_serializers (blue, green, red):
-tmds_serializer red_ser(
-      .clk_pixel_in(clk_pixel),
-      .clk_5x_in(clk_5x),
-      .rst_in(sys_rst_pixel),
-      .tmds_in(tmds_10b[2]),
-      .tmds_out(tmds_signal[2]));
-tmds_serializer green_ser(
-      .clk_pixel_in(clk_pixel),
-      .clk_5x_in(clk_5x),
-      .rst_in(sys_rst_pixel),
-      .tmds_in(tmds_10b[1]),
-      .tmds_out(tmds_signal[1]));
-tmds_serializer blue_ser(
-      .clk_pixel_in(clk_pixel),
-      .clk_5x_in(clk_5x),
-      .rst_in(sys_rst_pixel),
-      .tmds_in(tmds_10b[0]),
-      .tmds_out(tmds_signal[0]));
+   video_mux mvm(
+      .bg_in(display_choice), //choose background
+      .staff_pixel_in(staff_pixel), //TODO: needs (PS2)
+      .camera_y_in(y_channel), //luminance TODO: needs (PS6)
+      .thresholded_pixel_in(mask), //one bit mask signal TODO: needs (PS4)
+      .crosshair_in({ch_red, ch_green, ch_blue}), //TODO: needs (PS8)
+      .pixel_out({red,green,blue}) //output to tmds
+   );
+
+   // HDMI Output: just like before!
+
+   logic [9:0] tmds_10b [0:2]; //output of each TMDS encoder!
+   logic       tmds_signal [2:0]; //output of each TMDS serializer!
+
+   //three tmds_encoders (blue, green, red)
+   //note green should have no control signal like red
+   //the blue channel DOES carry the two sync signals:
+   //  * control_in[0] = horizontal sync signal
+   //  * control_in[1] = vertical sync signal
+
+   tmds_encoder tmds_red(
+         .clk_in(clk_pixel),
+         .rst_in(sys_rst_pixel),
+         .data_in(red),
+         .control_in(2'b0),
+         .ve_in(active_draw_hdmi_pipe[7]),
+         .tmds_out(tmds_10b[2]));
+
+   tmds_encoder tmds_green(
+         .clk_in(clk_pixel),
+         .rst_in(sys_rst_pixel),
+         .data_in(green),
+         .control_in(2'b0),
+         .ve_in(active_draw_hdmi_pipe[7]),
+         .tmds_out(tmds_10b[1]));
+
+   tmds_encoder tmds_blue(
+         .clk_in(clk_pixel),
+         .rst_in(sys_rst_pixel),
+         .data_in(blue),
+         .control_in({vsync_hdmi_pipe[7],hsync_hdmi_pipe[7]}),
+         .ve_in(active_draw_hdmi_pipe[7]),
+         .tmds_out(tmds_10b[0]));
+
+
+   //three tmds_serializers (blue, green, red):
+   tmds_serializer red_ser(
+         .clk_pixel_in(clk_pixel),
+         .clk_5x_in(clk_5x),
+         .rst_in(sys_rst_pixel),
+         .tmds_in(tmds_10b[2]),
+         .tmds_out(tmds_signal[2]));
+   tmds_serializer green_ser(
+         .clk_pixel_in(clk_pixel),
+         .clk_5x_in(clk_5x),
+         .rst_in(sys_rst_pixel),
+         .tmds_in(tmds_10b[1]),
+         .tmds_out(tmds_signal[1]));
+   tmds_serializer blue_ser(
+         .clk_pixel_in(clk_pixel),
+         .clk_5x_in(clk_5x),
+         .rst_in(sys_rst_pixel),
+         .tmds_in(tmds_10b[0]),
+         .tmds_out(tmds_signal[0]));
 
    //output buffers generating differential signals:
    //three for the r,g,b signals and one that is at the pixel clock rate
