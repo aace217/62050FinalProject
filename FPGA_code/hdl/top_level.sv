@@ -149,19 +149,11 @@ assign y_channel = y_full[7:0];
 threshold mt(
    .clk_in(clk_camera),
    .rst_in(sys_rst_camera),
-   .pixel_in(selected_channel),
+   .pixel_in(cr_channel),
    .lower_bound_in(lower_threshold),
    .upper_bound_in(upper_threshold),
    .mask_out(mask) //single bit if pixel within mask.
 );
-
-// Crosshairs
-logic [7:0] ch_red, ch_green, ch_blue;
-always_comb begin
-   ch_red   = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
-   ch_green = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
-   ch_blue  = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
-end
 
 
 // Seven segment controller_________________________________________________________________________________
@@ -173,7 +165,7 @@ end
                   .rst_in(sys_rst_camera),
                   .lt_in(lower_threshold),
                   .ut_in(upper_threshold),
-                  .channel_sel_in(channel_sel),
+                  .channel_sel_in(3'b101),
                   .cat_out(ss_c),
                   .an_out({ss0_an, ss1_an})
    );
@@ -210,6 +202,16 @@ end
       end
    end
 
+      
+   // Crosshairs
+   logic [7:0] ch_red, ch_green, ch_blue;
+   always_comb begin
+      ch_red   = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
+      ch_green = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
+      ch_blue  = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
+   end
+
+
 // Baton tracker & BPM_________________________________________________________________________________
 
    logic [1:0] set_bpm;
@@ -231,7 +233,7 @@ end
    ( .y_com_in(y_com),
    .measure_in(set_bpm == 2'b01),
    .rst_in(sys_rst_camera),
-   .clk_camera_in(clk_c),
+   .clk_camera_in(clk_camera),
    .change_out(beat_detected)
    );
 
@@ -473,7 +475,7 @@ blk_mem_gen_0 frame_buffer (
          .rst_in(sys_rst_pixel),
          .data_in(red),
          .control_in(2'b0),
-         .ve_in(active_draw_hdmi_pipe[7]),
+         .ve_in(active_draw_hdmi),
          .tmds_out(tmds_10b[2]));
 
    tmds_encoder tmds_green(
@@ -481,15 +483,15 @@ blk_mem_gen_0 frame_buffer (
          .rst_in(sys_rst_pixel),
          .data_in(green),
          .control_in(2'b0),
-         .ve_in(active_draw_hdmi_pipe[7]),
+         .ve_in(active_draw_hdmi),
          .tmds_out(tmds_10b[1]));
 
    tmds_encoder tmds_blue(
          .clk_in(clk_pixel),
          .rst_in(sys_rst_pixel),
          .data_in(blue),
-         .control_in({vsync_hdmi_pipe[7],hsync_hdmi_pipe[7]}),
-         .ve_in(active_draw_hdmi_pipe[7]),
+         .control_in({vsync_hdmi,hsync_hdmi}),
+         .ve_in(active_draw_hdmi),
          .tmds_out(tmds_10b[0]));
 
 
