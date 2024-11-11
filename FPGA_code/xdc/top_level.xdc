@@ -113,7 +113,7 @@ set_property -dict {PACKAGE_PIN C5  IOSTANDARD LVCMOS33} [ get_ports "ss0_c[3]"]
 set_property -dict {PACKAGE_PIN D7  IOSTANDARD LVCMOS33} [ get_ports "ss0_c[4]"]
 set_property -dict {PACKAGE_PIN D6  IOSTANDARD LVCMOS33} [ get_ports "ss0_c[5]"]
 set_property -dict {PACKAGE_PIN C4  IOSTANDARD LVCMOS33} [ get_ports "ss0_c[6]"]
-##set_property -dict {PACKAGE_PIN B5  IOSTANDARD LVCMOS33} [ get_ports "ss0_cdp"]
+set_property -dict {PACKAGE_PIN B5  IOSTANDARD LVCMOS33} [ get_ports "ss0_cdp"]
 #
 set_property -dict {PACKAGE_PIN F3  IOSTANDARD LVCMOS33} [ get_ports "ss1_c[0]"]
 set_property -dict {PACKAGE_PIN G5  IOSTANDARD LVCMOS33} [ get_ports "ss1_c[1]"]
@@ -122,7 +122,7 @@ set_property -dict {PACKAGE_PIN H4  IOSTANDARD LVCMOS33} [ get_ports "ss1_c[3]"]
 set_property -dict {PACKAGE_PIN F4  IOSTANDARD LVCMOS33} [ get_ports "ss1_c[4]"]
 set_property -dict {PACKAGE_PIN H3  IOSTANDARD LVCMOS33} [ get_ports "ss1_c[5]"]
 set_property -dict {PACKAGE_PIN E5  IOSTANDARD LVCMOS33} [ get_ports "ss1_c[6]"]
-##set_property -dict {PACKAGE_PIN J4  IOSTANDARD LVCMOS33} [ get_ports "ss1_c[7]"]
+set_property -dict {PACKAGE_PIN J4  IOSTANDARD LVCMOS33} [ get_ports "ss1_c[7]"]
 
 
 #set_property -dict {PACKAGE_PIN F14 IOSTANDARD LVCMOS33}  [ get_ports "pmoda[0]" ]
@@ -161,15 +161,15 @@ set_property -dict { PACKAGE_PIN R16   IOSTANDARD TMDS_33  } [get_ports {hdmi_tx
 set_property -dict { PACKAGE_PIN R14   IOSTANDARD TMDS_33  } [get_ports {hdmi_tx_p[2]}]
 
 #change G15 to B13 and E13 to B14
-#set_property PACKAGE_PIN B13 [ get_ports "spkl"]
-#set_property PACKAGE_PIN B14 [ get_ports "spkr"]
-#set_property IOSTANDARD LVCMOS33 [ get_ports "spk*"]
+set_property PACKAGE_PIN B13 [ get_ports "spkl"]
+set_property PACKAGE_PIN B14 [ get_ports "spkr"]
+set_property IOSTANDARD LVCMOS33 [ get_ports "spk*"]
 
 set_property BITSTREAM.CONFIG.UNUSEDPIN PULLUP [current_design]
 set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]
 
 # uart pins for working with manta
-#set_property PACKAGE_PIN B16 [ get_ports "uart_rxd" ]
-#set_property PACKAGE_PIN A16 [ get_ports "uart_txd" ]
-#set_property IOSTANDARD LVCMOS33 [ get_ports "uart*" ]
+set_property PACKAGE_PIN B16 [ get_ports "uart_rxd" ]
+set_property PACKAGE_PIN A16 [ get_ports "uart_txd" ]
+# set_property IOSTANDARD LVCMOS33 [ get_ports "uart*" ]
 
