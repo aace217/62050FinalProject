@@ -28,6 +28,8 @@ set_property -dict {PACKAGE_PIN E14 IOSTANDARD LVCMOS33}  [ get_ports "camera_d[
 # pmoda[7]
 set_property -dict {PACKAGE_PIN E15 IOSTANDARD LVCMOS33}  [ get_ports "camera_d[6]" ]
 
+
+
 # jab[0]
 set_property -dict {PACKAGE_PIN D11 IOSTANDARD LVCMOS33 DRIVE 24} [get_ports "cam_xclk" ]
 # jab[1]
@@ -132,7 +134,7 @@ set_property -dict {PACKAGE_PIN E5  IOSTANDARD LVCMOS33} [ get_ports "ss1_c[6]"]
 #set_property -dict {PACKAGE_PIN E14 IOSTANDARD LVCMOS33}  [ get_ports "pmoda[6]" ]
 #set_property -dict {PACKAGE_PIN E15 IOSTANDARD LVCMOS33}  [ get_ports "pmoda[7]" ]
 ##fixed K14 and J15 which were a copy-paste and wrong.
-#set_property -dict {PACKAGE_PIN H18 IOSTANDARD LVCMOS33}  [ get_ports "pmodb[0]" ]
+set_property -dict {PACKAGE_PIN H18 IOSTANDARD LVCMOS33}  [ get_ports "midi_data_in" ]
 #set_property -dict {PACKAGE_PIN G18 IOSTANDARD LVCMOS33}  [ get_ports "pmodb[1]" ]
 #set_property -dict {PACKAGE_PIN K14 IOSTANDARD LVCMOS33}  [ get_ports "pmodb[2]" ]
 
