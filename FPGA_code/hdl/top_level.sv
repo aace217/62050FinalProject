@@ -165,20 +165,20 @@ end
 
 
 // Seven segment controller_________________________________________________________________________________
-logic [6:0] ss_c;
-//modified version of seven segment display for showing
-// thresholds and selected channel
-// special customized version
-lab05_ssc mssc(.clk_in(clk_camera),
-               .rst_in(sys_rst_camera),
-               .lt_in(lower_threshold),
-               .ut_in(upper_threshold),
-               .channel_sel_in(channel_sel),
-               .cat_out(ss_c),
-               .an_out({ss0_an, ss1_an})
-);
-assign ss0_c = ss_c; //control upper four digit's cathodes!
-assign ss1_c = ss_c; //same as above but for lower four digits!
+   logic [6:0] ss_c;
+   //modified version of seven segment display for showing
+   // thresholds and selected channel
+   // special customized version
+   lab05_ssc mssc(.clk_in(clk_camera),
+                  .rst_in(sys_rst_camera),
+                  .lt_in(lower_threshold),
+                  .ut_in(upper_threshold),
+                  .channel_sel_in(channel_sel),
+                  .cat_out(ss_c),
+                  .an_out({ss0_an, ss1_an})
+   );
+   assign ss0_c = ss_c; //control upper four digit's cathodes!
+   assign ss1_c = ss_c; //same as above but for lower four digits!
 
 // Center of mass_________________________________________________________________________________
 
@@ -207,65 +207,102 @@ assign ss1_c = ss_c; //same as above but for lower four digits!
 
 // Baton tracker & BPM_________________________________________________________________________________
 
-logic [1:0] set_bpm;
-logic [1:0] set_bpm_buf;
-assign set_bpm = sw[3:2];
-// sw == 00: don't set bpm
-// sw == 01: set bpm with baton
-// sw == 10: set bpm with switches 15-8
-always_ff @(posedge clk_camera) begin
-   set_bpm_buf <= set_bpm; // buffering 1 cycle for the cycle between baton_tracker and bpm
-end
+   logic [1:0] set_bpm;
+   logic [1:0] set_bpm_buf;
+   assign set_bpm = sw[3:2];
+   // sw == 00: don't set bpm
+   // sw == 01: set bpm with baton
+   // sw == 10: set bpm with switches 15-8
+   always_ff @(posedge clk_camera) begin
+      set_bpm_buf <= set_bpm; // buffering 1 cycle for the cycle between baton_tracker and bpm
+   end
 
-logic beat_detected;
-logic [7:0] bpm;
-logic [7:0] manual_bpm;
-assign manual_bpm =  sw[15:8];
+   logic beat_detected;
+   logic [7:0] bpm;
+   logic [7:0] manual_bpm;
+   assign manual_bpm =  sw[15:8];
 
-baton_tracker my_bt
-( .y_com_in(y_com),
-  .measure_in(set_bpm == 2'b01),
-  .rst_in(sys_rst_camera),
-  .clk_camera_in(clk_c),
-  .change_out(beat_detected)
-);
+   baton_tracker my_bt
+   ( .y_com_in(y_com),
+   .measure_in(set_bpm == 2'b01),
+   .rst_in(sys_rst_camera),
+   .clk_camera_in(clk_c),
+   .change_out(beat_detected)
+   );
 
-bpm gen_bpm 
-( .change_in(beat_detected),
-  .bpm_in(manual_bpm),
-  .rst_in(sys_rst_camera),
-  .clk_camera_in(clk_camera),
-  .valid_override_in(set_bpm_buf == 2'b10),
-  .measure_in(set_bpm_buf == 2'b01),
-  .bpm_out(bpm)
-);
+   bpm gen_bpm 
+   ( .change_in(beat_detected),
+   .bpm_in(manual_bpm),
+   .rst_in(sys_rst_camera),
+   .clk_camera_in(clk_camera),
+   .valid_override_in(set_bpm_buf == 2'b10),
+   .measure_in(set_bpm_buf == 2'b01),
+   .bpm_out(bpm)
+   );
+
+// UART Transmit_________________________________________________________________________________
+
+   logic [7:0] to_transmit;
+   logic [15:0] raw_message;
+   logic [15:0] full_message;
+   logic new_message;
+   logic uart_busy;
+   logic [3:0] uart_counter;
+
+   //sampling one of every two data points... may need to be changed
+   always_ff @(posedge clk_camera) begin
+      if (sys_rst_camera) begin
+         new_message <= 1;
+         raw_message <= {y_com, 4'b0, beat_detected}; // updates every cycle
+         uart_counter <= 0;
+      end else begin
+         if (uart_counter == 0) begin
+            to_transmit <= full_message[15:8];
+            full_message <= (new_message)? {y_com, 4'b0, beat_detected}: full_message << 8;
+            new_message <= !new_message;
+         end
+         uart_counter <= (uart_counter == 9)? 0 : uart_counter + 1;
+      end
+   end
+
+   uart_transmit #( // parameters copied from lab 3, potentially need to be changed
+      .INPUT_CLOCK_FREQ(100000000),
+      .BAUD_RATE(115200)
+   ) my_uart (
+      .clk_in(clk_camera),
+      .rst_in(sys_rst_camera),
+      .data_byte_in(to_transmit),
+      .trigger_in(uart_counter == 0),
+      .busy_out(uart_busy),
+      .tx_wire_out(uart_txd)
+      );
 
 // MIDI In/Files_________________________________________________________________________________
-logic [31:0] measured_val; // for easy display on an ssd
-logic [7:0] velocity_out,received_note_out;
-logic [3:0] channel_out;
-logic midi_msg_type,midi_data_ready;
+   logic [31:0] measured_val; // for easy display on an ssd
+   logic [7:0] velocity_out,received_note_out;
+   logic [3:0] channel_out;
+   logic midi_msg_type,midi_data_ready;
 
-midi_decode midi_decoder(
-  .midi_Data_in(midi_data_in),
-  .rst_in(sys_rst_camera),
-  .clk_in(clk_100mhz),
-  .velocity_out(velocity_out),
-  .received_note_out(received_note_out),
-  .channel_out(channel_out),
-  .status(midi_msg_type),
-  .data_ready_out(midi_data_ready)
-);
+   midi_decode midi_decoder(
+   .midi_Data_in(midi_data_in),
+   .rst_in(sys_rst_camera),
+   .clk_in(clk_camera),
+   .velocity_out(velocity_out),
+   .received_note_out(received_note_out),
+   .channel_out(channel_out),
+   .status(midi_msg_type),
+   .data_ready_out(midi_data_ready)
+   );
 
-always_ff @(posedge @clk_100mhz)begin
-    if(midi_data_ready)begin
-        measured_val <= {7'b0,midi_msg_type},{4'b0,channel_out},received_note_out,velocity_out};
-    end
-end
+   always_ff @(posedge @clk_camera)begin
+      if(midi_data_ready)begin
+         measured_val <= {7'b0,midi_msg_type},{4'b0,channel_out},received_note_out,velocity_out};
+      end
+   end
 // seven segment for debugging
 // logic [6:0] ss_c;
 // seven_segment_controller debug_ssc(
-//   .clk_in(clk_100mhz),
+//   .clk_in(clk_camera),
 //   .rst_in(rst_midi),
 //   .val_in(val),
 //   .cat_out(ss_c),
@@ -274,21 +311,54 @@ end
 // assign ss0_c = ss_c;
 // assign ss1_c = ss_c;
 
+// PWM Output_________________________________________________________________________________
+// Assuming we will get at most five notes together from the module after midi_decode
+// For now, just working with one midi note to output
+
+   logic [7:0] sound_wave;
+   logic [7:0] midi_note_copy;
+   logic [7:0] note_pitch;
+   logic [7:0] note_octave;
+
+   always_comb begin
+      midi_note_copy = received_note_out;
+      note_octave = 0;
+      for (int i = 0; i < 11; i ++) begin
+         if (midi_note_copy > 11) begin
+            midi_note_copy = midi_note_copy - 12;
+            note_octave = note_octave + 1;
+         end
+      end
+      note_pitch = midi_note_copy[3:0];
+   end
+
+   // and then some sort of bram to get sound wave from input note note_pitch
+   // sample it based off note_octave, put into sound_wave
+
+   pwm audio_out
+   (.clk_in(clk_camera),
+   .rst_in(sys_rst_camera),
+   .dc_in(sound_wave),
+   .sig_out(spk_out)
+   );
+
+   // set both output channels equal to the same PWM signal!
+   assign spkl = spk_out;
+   assign spkr = spk_out;
 
 // Staff Creation & Image Sprite_________________________________________________________________________________
 
-staff_creation my_staff 
-( .hcount(camera_hcount),
-  .vcount(camera_vcount),
-  .bpm(bpm),
-  .received_note(received_note_out),
-  .clk_camera_in(clk_camera),
-  .rst_in(sys_rst_camera),
-  .staff_out(staff_pixel),
-  .staff_valid(staff_val)
-);
+   staff_creation my_staff 
+   ( .hcount(camera_hcount),
+   .vcount(camera_vcount),
+   .bpm(bpm),
+   .received_note(received_note_out),
+   .clk_camera_in(clk_camera),
+   .rst_in(sys_rst_camera),
+   .staff_out(staff_pixel),
+   .staff_valid(staff_val)
+   );
 
-// UART Transmit_________________________________________________________________________________
 
 // Video signal generator_________________________________________________________________________________
 
