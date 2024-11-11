@@ -12,6 +12,9 @@ module staff_creation (
     output logic staff_valid
 );
 
+assign staff_out = 0;
+assign staff_valid = 0;
+
 endmodule
 
 `default_nettype wire
