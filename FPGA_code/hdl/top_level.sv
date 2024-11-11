@@ -27,10 +27,10 @@ module top_level (
    output logic        hdmi_clk_p, hdmi_clk_n, //differential hdmi clock
    // speakers
    output logic        spkl, spkr, // left and right channels of line out port
-   input wire          cipo, // SPI controller-in peripheral-out
-   output logic        copi, dclk, cs, // SPI controller output signals
+   // input wire          cipo, // SPI controller-in peripheral-out
+   // output logic        copi, dclk, cs, // SPI controller output signals
    // uart
-   input wire 				 uart_rxd, // UART computer-FPGA
+   // input wire 				 uart_rxd, // UART computer-FPGA
    output logic 			 uart_txd, // UART FPGA-computer
 
    // midi
