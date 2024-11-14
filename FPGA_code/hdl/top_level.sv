@@ -108,6 +108,21 @@ module top_level (
    logic [15:0] val_cam_pixel;
    assign val_cam_pixel = (camera_valid)? camera_pixel: 16'b0;
 
+   logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
+
+   seven_segment_controller pixel_display_test
+   (.clk_in(clk_camera),
+   .rst_in(sys_rst_camera),
+   // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
+   .val_in({camera_d_buf[0], 4'b0, 3'b0, cam_pclk, 3'b0, cam_pclk_buf[0], 3'b0, cam_hsync_buf[0], 3'b0, cam_vsync_buf[0], 3'b0, cam_xclk}),
+   .cat_out(ss_c),
+   .an_out({ss0_an, ss1_an})
+   );
+
+   assign ss0_c = ss_c; //control upper four digit's cathodes!
+   assign ss1_c = ss_c; //same as above but for lower four digits!
+
+
 // Color channel_________________________________________________________________________________
 
 logic [9:0] y_full, cr_full, cb_full; //ycrcb conversion of full pixel
@@ -157,20 +172,20 @@ threshold mt(
 
 
 // Seven segment controller_________________________________________________________________________________
-   logic [6:0] ss_c;
+   // logic [6:0] ss_c;
    //modified version of seven segment display for showing
    // thresholds and selected channel
    // special customized version
-   lab05_ssc mssc(.clk_in(clk_camera),
-                  .rst_in(sys_rst_camera),
-                  .lt_in(lower_threshold),
-                  .ut_in(upper_threshold),
-                  .channel_sel_in(3'b101),
-                  .cat_out(ss_c),
-                  .an_out({ss0_an, ss1_an})
-   );
-   assign ss0_c = ss_c; //control upper four digit's cathodes!
-   assign ss1_c = ss_c; //same as above but for lower four digits!
+   // lab05_ssc mssc(.clk_in(clk_camera),
+   //                .rst_in(sys_rst_camera),
+   //                .lt_in({camera_d_buf[0]}), //lower_threshold
+   //                .ut_in({3'b0, cam_hsync_buf[0],3'b0, cam_vsync_buf[0]}), //upper_threshold
+   //                .channel_sel_in(3'b101),
+   //                .cat_out(ss_c),
+   //                .an_out({ss0_an, ss1_an})
+   // );
+   // assign ss0_c = ss_c; //control upper four digit's cathodes!
+   // assign ss1_c = ss_c; //same as above but for lower four digits!
 
 // Center of mass_________________________________________________________________________________
 
@@ -395,43 +410,84 @@ video_sig_gen vsg
    .fc_out(frame_count_hdmi)
    );
 
-// Frame Buffer_________________________________________________________________________________
+// Frame Buffer (Staff)_________________________________________________________________________________
 
 localparam FB_DEPTH = 320*180;
 localparam FB_SIZE = $clog2(FB_DEPTH); // 15
-logic [FB_SIZE-1:0] addra; //used to specify address to write to in frame buffer
+logic [FB_SIZE-1:0] addra_staff; //used to specify address to write to in frame buffer
+
+logic valid_staff_mem; //used to enable writing pixel data to frame buffer
+logic [1:0] staff_mem; //used to pass pixel data into frame buffer; black & white
+
+// logic [1:0] staff_buff_raw; //data out of frame buffer; black & white
+// logic [FB_SIZE-1:0] addrb_staff; //used to lookup address in memory for reading from buffer
+// logic good_addrb_staff; //used to indicate within valid frame for scaling
+
+// always_ff @(posedge clk_camera)begin
+//    // addra logic
+//    if (camera_vcount[1:0] == 0 && camera_hcount[1:0] == 0 && staff_val) begin // every 4 addresses are "valid" for 4x downscaling
+//       valid_staff_mem <= staff_val;
+//       addra_staff <= {5'b0, (camera_vcount>>2)}*320 + {4'b0,(camera_hcount>>2)};
+//       staff_mem <= staff_pixel;
+//    end else begin
+//       valid_staff_mem <= 0;
+//    end
+
+//    //addrb logic
+//    addrb_staff <= {5'b0, vcount_hdmi>>2}*320 + {4'b0,hcount_hdmi>>2};
+//    good_addrb_staff <=(hcount_hdmi<1280)&&(vcount_hdmi<720);
+// end
+
+// //frame buffer from IP
+// blk_mem_gen_0 frame_buffer_staff (
+//    .addra(addra_staff), //pixels are stored using this math
+//    .clka(clk_camera),
+//    .wea(valid_staff_mem),
+//    .dina(staff_mem),
+//    .ena(1'b1),
+//    .douta(), //never read from this side
+//    .addrb(addrb_staff),//transformed lookup pixel
+//    .dinb(16'b0),
+//    .clkb(clk_pixel),
+//    .web(1'b0),
+//    .enb(1'b1),
+//    .doutb(staff_buff_raw)
+// );
+// Frame Buffer (Camera)_________________________________________________________________________________
+
+logic [FB_SIZE-1:0] addra_cam; //used to specify address to write to in frame buffer
 
 logic valid_camera_mem; //used to enable writing pixel data to frame buffer
-logic [1:0] camera_mem; //used to pass pixel data into frame buffer; black & white
+logic [15:0] camera_mem; //used to pass pixel data into frame buffer; black & white
 
-logic [1:0] frame_buff_raw; //data out of frame buffer; black & white
-logic [FB_SIZE-1:0] addrb; //used to lookup address in memory for reading from buffer
-logic good_addrb; //used to indicate within valid frame for scaling
+logic [15:0] frame_buff_raw; //data out of frame buffer; black & white
+logic [FB_SIZE-1:0] addrb_cam; //used to lookup address in memory for reading from buffer
+logic good_addrb_cam; //used to indicate within valid frame for scaling
 
 always_ff @(posedge clk_camera)begin
    // addra logic
-   if (camera_vcount[1:0] == 0 && camera_hcount[1:0] == 0 && staff_val) begin // every 4 addresses are "valid" for 4x downscaling
-      valid_camera_mem <= staff_val;
-      addra <= {5'b0, (camera_vcount>>2)}*320 + {4'b0,(camera_hcount>>2)};
-      camera_mem <= staff_pixel;
+   if (camera_vcount[1:0] == 0 && camera_hcount[1:0] == 0 && camera_valid) begin // every 4 addresses are "valid" for 4x downscaling
+      valid_camera_mem <= camera_valid;
+      addra_cam <= {5'b0, (camera_vcount>>2)}*320 + {4'b0,(camera_hcount>>2)};
+      camera_mem <= camera_pixel;
    end else begin
       valid_camera_mem <= 0;
    end
 
    //addrb logic
-   addrb <= {5'b0, vcount_hdmi>>2}*320 + {4'b0,hcount_hdmi>>2};
-   good_addrb <=(hcount_hdmi<1280)&&(vcount_hdmi<720);
+   addrb_cam <= {5'b0, vcount_hdmi>>2}*320 + {4'b0,hcount_hdmi>>2};
+   good_addrb_cam <=(hcount_hdmi<1280)&&(vcount_hdmi<720);
 end
 
 //frame buffer from IP
-blk_mem_gen_0 frame_buffer (
-   .addra(addra), //pixels are stored using this math
+blk_mem_gen_0 frame_buffer_cam (
+   .addra(addra_cam), //pixels are stored using this math
    .clka(clk_camera),
    .wea(valid_camera_mem),
    .dina(camera_mem),
    .ena(1'b1),
    .douta(), //never read from this side
-   .addrb(addrb),//transformed lookup pixel
+   .addrb(addrb_cam),//transformed lookup pixel
    .dinb(16'b0),
    .clkb(clk_pixel),
    .web(1'b0),
@@ -452,10 +508,12 @@ blk_mem_gen_0 frame_buffer (
 
    video_mux mvm(
       .bg_in(display_choice), //choose background
-      .staff_pixel_in(staff_pixel), //TODO: needs (PS2)
+      .staff_pixel_in(0), //TODO: needs (PS2)staff_buff_raw
       .camera_y_in(y_channel), //luminance TODO: needs (PS6)
       .thresholded_pixel_in(mask), //one bit mask signal TODO: needs (PS4)
       .crosshair_in({ch_red, ch_green, ch_blue}), //TODO: needs (PS8)
+      // .camera_pixel_in({frame_buff_raw[15:11], frame_buff_raw[10:5], frame_buff_raw[4:0]}), //TODO: needs (PS8)
+      .camera_pixel_in({cam_red, cam_green, cam_blue}), //TODO: needs (PS8)
       .pixel_out({red,green,blue}) //output to tmds
    );
 
