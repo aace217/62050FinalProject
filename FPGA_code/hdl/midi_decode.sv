@@ -19,7 +19,7 @@ module midi_decode(
     enum logic [2:0]  {IDLE,FIRST_BYTE,SECOND_BYTE, THIRD_BYTE, TRANSMITTING} midi_state;
     
     uart_receive #(
-        .INPUT_CLOCK_FREQ(100_000_000),
+        .INPUT_CLOCK_FREQ(200_000_000),
         .BAUD_RATE(31250)
     ) uart_helper(
         .clk_in(clk_in),

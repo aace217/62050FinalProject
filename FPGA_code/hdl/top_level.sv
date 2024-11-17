@@ -108,19 +108,19 @@ module top_level (
    logic [15:0] val_cam_pixel;
    assign val_cam_pixel = (camera_valid)? camera_pixel: 16'b0;
 
-   logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
+   //logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
 
-   seven_segment_controller pixel_display_test
-   (.clk_in(clk_camera),
-   .rst_in(sys_rst_camera),
-   // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({camera_d_buf[0], 4'b0, 3'b0, cam_pclk, 3'b0, cam_pclk_buf[0], 3'b0, cam_hsync_buf[0], 3'b0, cam_vsync_buf[0], 3'b0, cam_xclk}),
-   .cat_out(ss_c),
-   .an_out({ss0_an, ss1_an})
-   );
+   // seven_segment_controller pixel_display_test
+   // (.clk_in(clk_camera),
+   // .rst_in(sys_rst_camera),
+   // // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
+   // .val_in({camera_d_buf[0], 4'b0, 3'b0, cam_pclk, 3'b0, cam_pclk_buf[0], 3'b0, cam_hsync_buf[0], 3'b0, cam_vsync_buf[0], 3'b0, cam_xclk}),
+   // .cat_out(ss_c),
+   // .an_out({ss0_an, ss1_an})
+   // );
 
-   assign ss0_c = ss_c; //control upper four digit's cathodes!
-   assign ss1_c = ss_c; //same as above but for lower four digits!
+   // assign ss0_c = ss_c; //control upper four digit's cathodes!
+   // assign ss1_c = ss_c; //same as above but for lower four digits!
 
 
 // Color channel_________________________________________________________________________________
@@ -303,24 +303,55 @@ threshold mt(
    logic [31:0] measured_val; // for easy display on an ssd
    logic [7:0] velocity_out,received_note_out;
    logic [3:0] channel_out;
-   logic midi_msg_type,midi_data_ready;
+   logic midi_msg_type,midi_data_ready,midi_burst_ready;
+   logic [31:0] burst_on [3:0];
+   logic [31:0] burst_off [3:0];
+   logic [31:0] ss_var [3:0];
+   logic burst_ready;
+   
 
    midi_decode midi_decoder(
-   .midi_Data_in(midi_data_in),
-   .rst_in(sys_rst_camera),
-   .clk_in(clk_camera),
-   .velocity_out(velocity_out),
-   .received_note_out(received_note_out),
-   .channel_out(channel_out),
-   .status(midi_msg_type),
-   .data_ready_out(midi_data_ready)
+      .midi_Data_in(midi_data_in),
+      .rst_in(sys_rst_camera),
+      .clk_in(clk_camera),
+      .velocity_out(velocity_out),
+      .received_note_out(received_note_out),
+      .channel_out(channel_out),
+      .status(midi_msg_type),
+      .data_ready_out(midi_data_ready)
    );
-
-   always_ff @(posedge clk_camera)begin
-      if (midi_data_ready) begin
-         measured_val <= {{7'b0,midi_msg_type},{4'b0,channel_out},received_note_out,velocity_out};
-      end
+   // note that midi_burst will not always take BURST_DURATION CYCLES
+   // If it receives 5 notes before BURST_DURATION CYCLES,
+   // then it will output its data
+   midi_burst #(.BURST_DURATION(1_500_000)) note_collector(
+      .midi_velocity_in(velocity_out),
+      .midi_received_note_in(received_note_out),
+      .midi_channel_in(channel_out),
+      .midi_data_ready_in(midi_data_ready),
+      .midi_status_in(midi_msg_type),
+      .rst_in(sys_rst_camera),
+      .clk_in(clk_camera),
+      .burst_notes_on_out(burst_on),
+      .burst_notes_off_out(burst_off),
+      .burst_ready_out(burst_ready)
+   );
+//seven segment for debugging
+logic [6:0] ss_c;
+always_ff @(posedge clk_camera)begin
+   if(burst_ready)begin
+      ss_var <= burst_on;
    end
+
+end
+seven_segment_controller debug_ssc(
+  .clk_in(clk_camera),
+  .rst_in(sys_rst_camera),
+  .val_in({ss_var[3][15:8],ss_var[2][15:8],ss_var[1][15:8],ss_var[0][15:8]}),
+  .cat_out(ss_c),
+  .an_out({ss0_an, ss1_an})
+);
+assign ss0_c = ss_c;
+assign ss1_c = ss_c;
 // seven segment for debugging
 // logic [6:0] ss_c;
 // seven_segment_controller debug_ssc(
