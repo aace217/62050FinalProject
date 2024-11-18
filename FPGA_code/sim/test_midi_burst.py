@@ -51,7 +51,8 @@ async def end_note(dut,note,channel):
     dut.midi_received_note_in.value = 0
     dut.midi_channel_in.value = 0
 
-    
+
+
 @cocotb.test()
 async def test_tmds(dut):
     cocotb.start_soon(Clock(dut.clk_in, 10, units="ns").start())

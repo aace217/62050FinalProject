@@ -16,7 +16,7 @@ module midi_decode(
     logic [14:0] cc;
     localparam TIMEOUT_PERIOD = 20*100_000_000/31_250; // if one MIDI packet passes and nothing
                                                        // comes from UART, then something is wrong
-    enum logic [2:0]  {IDLE,FIRST_BYTE,SECOND_BYTE, THIRD_BYTE, TRANSMITTING} midi_state;
+    enum logic [1:0]  {IDLE,FIRST_BYTE,SECOND_BYTE, TRANSMITTING} midi_state;
     
     uart_receive #(
         .INPUT_CLOCK_FREQ(200_000_000),
@@ -48,18 +48,20 @@ module midi_decode(
                     msg <= 0;
                     status <= 0;
                     cc <= 0;
-                    if(~midi_Data_in)begin
+                    if(midi_byte_ready && uart_out != 8'hf8 && uart_out != 8'hfe && (uart_out == 8'h90 || uart_out == 8'h80))begin  
+                    // test condition for if statement tomorrow to only check for on or off messages
                         midi_state <= FIRST_BYTE;
+                        msg[7:0] <= uart_out;
                         cc <= 0;
                     end
                 end
                 FIRST_BYTE:begin
                     if(midi_byte_ready)begin
                         midi_state <= SECOND_BYTE;
-                        msg[7:0] <= uart_out;
-                        cc <= 0;
+                        msg[15:8] <= uart_out;
+                        cc <= 0; 
                     end
-                    else if(cc > TIMEOUT_PERIOD)begin
+                    else if(cc > TIMEOUT_PERIOD || uart_out == 8'hf8 || uart_out == 8'hfe)begin
                         midi_state <= IDLE;
                         cc <= 0;
                     end
@@ -67,34 +69,29 @@ module midi_decode(
                 end
                 SECOND_BYTE: begin
                     if(midi_byte_ready)begin
-                        midi_state <= THIRD_BYTE;
-                        msg[15:8] <= uart_out;
-                        cc <= 0;
-                    end
-                    else if(cc > TIMEOUT_PERIOD)begin
-                        midi_state <= IDLE;
-                        cc <= 0;
-                    end
-                    cc <= cc + 1;
-                end
-                THIRD_BYTE: begin
-                    if(midi_byte_ready)begin
                         midi_state <= TRANSMITTING;
                         msg[23:16] <= uart_out;
                         cc <= 0;
                     end
-                    else if(cc > TIMEOUT_PERIOD)begin
+                    else if(cc > TIMEOUT_PERIOD  || uart_out == 8'hf8 || uart_out == 8'hfe)begin
                         midi_state <= IDLE;
                         cc <= 0;
                     end
                     cc <= cc + 1;
                 end
                 TRANSMITTING: begin
-                    channel_out <= msg[3:0]; // those bits indicate the channel #
-                    received_note_out <= msg[15:8]; 
-                    velocity_out <= msg[23:16];
-                    status <= (msg[7:4] == 4'b1001); // these bits indicate whether note on or off
-                    data_ready_out <= 1;
+                    // the transmitting state will not be arrived at with bad data
+                    // due to previous checks
+                    
+                    //TODO: see if you can prvent sending empty data
+                    if(msg[15:8] != 8'b0 && msg[23:16] != 8'b0)begin
+                        channel_out <= msg[3:0]; // those bits indicate the channel #
+                        received_note_out <= msg[15:8]; 
+                        velocity_out <= msg[23:16];
+                        status <= (msg[7:4] == 4'b1001); // these bits indicate whether note on or off
+                        data_ready_out <= 1;
+                    end
+
                     midi_state <= IDLE;
                 end
                 default: midi_state <= IDLE;

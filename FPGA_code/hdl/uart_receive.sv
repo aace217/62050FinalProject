@@ -68,10 +68,10 @@ module uart_receive
                     end
                 end
                 TRANSMIT: begin
-                    new_data_out <= 1;
-                    receive_state <= IDLE;
-                    data_byte_out <= buffer_byte;
-                end
+                        new_data_out <= 1;
+                        receive_state <= IDLE;
+                        data_byte_out <= buffer_byte;
+                    end
                 STOP: begin
                     if((bit_cycles>HALF_PERIOD-1))begin
                         past_half <= 1;
