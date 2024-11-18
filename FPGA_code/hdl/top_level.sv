@@ -321,11 +321,12 @@ threshold mt(
    logic [7:0] velocity_out,received_note_out;
    logic [3:0] channel_out;
    logic midi_msg_type,midi_data_ready,midi_burst_ready;
-   logic [31:0] burst_on [3:0];
-   logic [31:0] burst_off [3:0];
-   logic [31:0] ss_var [3:0];
+   logic [31:0] burst_on [4:0];
+   logic [31:0] burst_off [4:0];
+   logic [31:0] ss_var [4:0];
    logic burst_ready;
-   
+   logic [23:0] debug;
+   logic [10:0] count;
 
    midi_decode midi_decoder(
       .midi_Data_in(midi_data_in),
@@ -337,6 +338,7 @@ threshold mt(
       .status(midi_msg_type),
       .data_ready_out(midi_data_ready)
    );
+
    // note that midi_burst will not always take BURST_DURATION CYCLES
    // If it receives 5 notes before BURST_DURATION CYCLES,
    // then it will output its data
@@ -357,6 +359,7 @@ logic [6:0] ss_c;
 always_ff @(posedge clk_camera)begin
    if(burst_ready)begin
       ss_var <= burst_on;
+      count <= count + 1;
    end
 
 end
@@ -364,6 +367,7 @@ seven_segment_controller debug_ssc(
   .clk_in(clk_camera),
   .rst_in(sys_rst_camera),
   .val_in({ss_var[3][15:8],ss_var[2][15:8],ss_var[1][15:8],ss_var[0][15:8]}),
+  //.val_in(count),
   .cat_out(ss_c),
   .an_out({ss0_an, ss1_an})
 );
