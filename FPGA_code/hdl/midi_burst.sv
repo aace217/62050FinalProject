@@ -10,18 +10,19 @@ module midi_burst#(
     input wire midi_status_in,
     input wire rst_in,
     input wire clk_in,
-    output logic [31:0] burst_notes_on_out [3:0],
-    output logic [31:0] burst_notes_off_out [3:0],
+    output logic [31:0] burst_notes_on_out [4:0],
+    output logic [31:0] burst_notes_off_out [4:0],
     output logic burst_ready_out,
     output logic [2:0] on_msg_count_out,
     output logic [2:0] off_msg_count_out
 );
+
     // purpose of this module is just to be able to get 5 simultaneous notes 
     // from the output of the midi device
     logic [$clog2(BURST_DURATION)-1:0] cycle_count;
     logic [2:0] local_on_msg_count,local_off_msg_count;
-    logic [31:0] midi_on_buffer [3:0];
-    logic [31:0] midi_off_buffer [3:0];
+    logic [31:0] midi_on_buffer [4:0];
+    logic [31:0] midi_off_buffer [4:0];
     logic [31:0] midi_data;
     enum logic [1:0]  {IDLE,COLLECTING,TRANSMITTING} burst_state;
     assign midi_data = {{7'b0,midi_status_in},{4'b0,midi_channel_in},midi_received_note_in,midi_velocity_in};
@@ -67,7 +68,7 @@ module midi_burst#(
             end
             COLLECTING:begin
                 cycle_count <= cycle_count + 1;
-                if(midi_data_ready_in && midi_status_in == 1)begin
+                if(midi_data_ready_in)begin
                     // need to check the type of message MIDI on or off
                     if(midi_status_in)begin
                         midi_on_buffer[local_on_msg_count] <= midi_data;
