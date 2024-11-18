@@ -530,6 +530,8 @@ assign ss1_c = ss_c;
    logic          vsync_hdmi;
    logic [10:0]  hcount_hdmi;
    logic [9:0]    vcount_hdmi;
+   logic [10:0]  hcount_hdmi_buf;
+   logic [9:0]    vcount_hdmi_buf;
    logic          active_draw_hdmi;
    logic          new_frame_hdmi;
    logic [5:0]    frame_count_hdmi;
@@ -546,6 +548,11 @@ assign ss1_c = ss_c;
    .ad_out(active_draw_hdmi),
    .fc_out(frame_count_hdmi)
    );
+
+   always_ff @(posedge clk_pixel) begin
+      hcount_hdmi_buf <= hcount_hdmi;
+      vcount_hdmi_buf <= vcount_hdmi;
+   end
 
 // Frame Buffer (Staff)_________________________________________________________________________________
 
@@ -571,8 +578,8 @@ logic [1:0] staff_mem; //used to pass pixel data into frame buffer; black & whit
 //    end
 
 //    //addrb logic
-//    addrb_staff <= {5'b0, vcount_hdmi>>2}*320 + {4'b0,hcount_hdmi>>2};
-//    good_addrb_staff <=(hcount_hdmi<1280)&&(vcount_hdmi<720);
+//    addrb_staff <= {5'b0, vcount_hdmi_buf>>2}*320 + {4'b0,hcount_hdmi_buf>>2};
+//    good_addrb_staff <=(hcount_hdmi_buf<1280)&&(vcount_hdmi_buf<720);
 // end
 
 // //frame buffer from IP
@@ -592,45 +599,62 @@ logic [1:0] staff_mem; //used to pass pixel data into frame buffer; black & whit
 // );
 // Frame Buffer (Camera)_________________________________________________________________________________
 
-logic [FB_SIZE-1:0] addra_cam; //used to specify address to write to in frame buffer
+   logic [FB_SIZE-1:0] addra_cam; //used to specify address to write to in frame buffer
 
-logic valid_camera_mem; //used to enable writing pixel data to frame buffer
-logic [15:0] camera_mem; //used to pass pixel data into frame buffer; black & white
+   logic valid_camera_mem; //used to enable writing pixel data to frame buffer
+   logic [15:0] camera_mem; //used to pass pixel data into frame buffer; black & white
 
-logic [15:0] frame_buff_raw; //data out of frame buffer; black & white
-logic [FB_SIZE-1:0] addrb_cam; //used to lookup address in memory for reading from buffer
-logic good_addrb_cam; //used to indicate within valid frame for scaling
+   logic [15:0] frame_buff_raw; //data out of frame buffer; black & white
+   logic [15:0] frame_buff_valid; //data out of frame buffer; black & white
+   logic [FB_SIZE-1:0] addrb_cam; //used to lookup address in memory for reading from buffer
+   logic good_addrb_cam; //used to indicate within valid frame for scaling
 
-always_ff @(posedge clk_camera)begin
-   // addra logic
-   if (camera_vcount[1:0] == 0 && camera_hcount[1:0] == 0 && camera_valid) begin // every 4 addresses are "valid" for 4x downscaling
-      valid_camera_mem <= camera_valid;
-      addra_cam <= {5'b0, (camera_vcount>>2)}*320 + {4'b0,(camera_hcount>>2)};
-      camera_mem <= val_cam_pixel[9];
-   end else begin
-      valid_camera_mem <= 0;
+   logic [FB_SIZE-1:0] addra_cam_buf; //used to lookup address in memory for reading from buffer
+   logic [FB_SIZE-1:0] addrb_cam_buf; //used to lookup address in memory for reading from buffer
+
+
+   always_ff @(posedge clk_camera)begin
+      // addra logic
+      if (camera_vcount_pipe[1][1:0] == 0 && camera_hcount_pipe[1][1:0] == 0 && camera_valid) begin // every 4 addresses are "valid" for 4x downscaling
+         valid_camera_mem <= camera_valid;
+         addra_cam <= {5'b0, (camera_vcount_pipe[1]>>2)}*320 + {4'b0,(camera_hcount_pipe[1]>>2)};
+         camera_mem <= val_cam_pixel[1]; // usually supposed to be 9, but we're circumventing all of the staff logic
+      end else begin
+         valid_camera_mem <= 0;
+      end
+      addra_cam_buf <= addra_cam;
    end
 
-   //addrb logic
-   addrb_cam <= {5'b0, vcount_hdmi>>2}*320 + {4'b0,hcount_hdmi>>2};
-   good_addrb_cam <=(hcount_hdmi<1280)&&(vcount_hdmi<720);
-end
+   always_ff @(posedge clk_pixel) begin
+      //addrb logic
+      addrb_cam <= {5'b0, vcount_hdmi_buf>>2}*320 + {4'b0,hcount_hdmi_buf>>2};
+      good_addrb_cam <=(hcount_hdmi_buf<1280)&&(vcount_hdmi_buf<720);
+      addrb_cam_buf <= addrb_cam;
+   end
 
-//frame buffer from IP
-blk_mem_gen_0 frame_buffer_cam (
-   .addra(addra_cam), //pixels are stored using this math
-   .clka(clk_camera),
-   .wea(valid_camera_mem),
-   .dina(camera_mem),
-   .ena(1'b1),
-   .douta(), //never read from this side
-   .addrb(addrb_cam),//transformed lookup pixel
-   .dinb(16'b0),
-   .clkb(clk_pixel),
-   .web(1'b0),
-   .enb(1'b1),
-   .doutb(frame_buff_raw)
-);
+   //frame buffer from IP
+   blk_mem_gen_0 frame_buffer_cam (
+      .addra(addra_cam_buf), //pixels are stored using this math
+      .clka(clk_camera),
+      .wea(valid_camera_mem),
+      .dina(camera_mem),
+      .ena(1'b1),
+      .douta(), //never read from this side
+      .addrb(addrb_cam_buf),//transformed lookup pixel
+      .dinb(16'b0),
+      .clkb(clk_pixel),
+      .web(1'b0),
+      .enb(1'b1),
+      .doutb(frame_buff_raw)
+   );
+
+   logic addrbp1, addrbp2;
+
+   always_ff @(posedge clk_pixel)begin
+      addrbp1 <= good_addrb_cam;
+      addrbp2 <= addrbp1;
+      frame_buff_valid <= addrbp2? frame_buff_raw:16'b0;
+   end
 
 // HDMI Video Out_________________________________________________________________________________
 
@@ -642,17 +666,18 @@ blk_mem_gen_0 frame_buffer_cam (
    assign display_choice = sw[4];
    logic [7:0]          red,green,blue;
 
-
    video_mux mvm(
       .bg_in(display_choice), //choose background
       .staff_pixel_in(0), //TODO: needs (PS2)staff_buff_raw
-      .camera_y_in(y_channel_pipe[9]), //luminance TODO: needs (PS6)
-      .thresholded_pixel_in(mask[8]), //one bit mask signal TODO: needs (PS4)
-      .crosshair_in({ch_red[8], ch_green[8], ch_blue[8]}), //TODO: needs (PS8)
-      .camera_pixel_in({frame_buff_raw[15:11], frame_buff_raw[10:5], frame_buff_raw[4:0]}), //TODO: needs (PS8)
+      .camera_y_in(y_channel_pipe[1]), // 9, luminance TODO: needs (PS6)
+      .thresholded_pixel_in(mask_pipe[0]), // 8, one bit mask signal TODO: needs (PS4)
+      // .crosshair_in({ch_red_pipe[8], ch_green_pipe[8], ch_blue_pipe[8]}), //TODO: needs (PS8)
+      .crosshair_in({ch_red_pipe[0], ch_green_pipe[0], ch_blue_pipe[0]}), //TODO: needs (PS8)
+      .camera_pixel_in({frame_buff_valid[15:11], frame_buff_valid[10:5], frame_buff_valid[4:0]}), //TODO: needs (PS8)
       // .camera_pixel_in({cam_red, cam_green, cam_blue}), //TODO: needs (PS8)
       .pixel_out({red,green,blue}) //output to tmds
    );
+
 
    // HDMI Output: just like before!
 
