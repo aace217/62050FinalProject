@@ -110,6 +110,38 @@ module top_level (
       val_cam_pixel <= (camera_valid)? camera_pixel: val_cam_pixel;
    end
 
+   logic [10:0] camera_hcount_pipe [11:0];
+   logic [9:0]  camera_vcount_pipe [11:0];
+   logic [15:0] val_cam_pixel_pipe [9:0];
+
+   pipeline #(
+   .PIPE_SIZE(16),
+   .STAGES_NEEDED(10)
+   ) val_cam_pixel_piper (
+   .clk_in(clk_pixel),
+   .wire_in(val_cam_pixel),
+   .wire_pipe_out(val_cam_pixel_pipe)
+   );
+
+
+   pipeline #(
+   .PIPE_SIZE(11),
+   .STAGES_NEEDED(12)  // 12 for now since staff creation is unknown, but will have at least 4 cycles
+   ) camera_hcount_piper (
+   .clk_in(clk_camera),
+   .wire_in(camera_hcount),
+   .wire_pipe_out(camera_hcount_pipe)
+   );
+
+   pipeline #(
+   .PIPE_SIZE(10),
+   .STAGES_NEEDED(12) // 12 for now since staff creation is unknown, but will have at least 4 cycles
+   ) camera_vcount_piper (
+   .clk_in(clk_camera),
+   .wire_in(camera_vcount),
+   .wire_pipe_out(camera_vcount_pipe)
+   );
+
    //logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
 
    // seven_segment_controller pixel_display_test
@@ -127,52 +159,74 @@ module top_level (
 
 // Color channel_________________________________________________________________________________
 
-logic [9:0] y_full, cr_full, cb_full; //ycrcb conversion of full pixel
-logic [7:0] cam_red, cam_green, cam_blue;
+   logic [9:0] y_full, cr_full, cb_full; //ycrcb conversion of full pixel
+   logic [7:0] cam_red, cam_green, cam_blue;
 
-always_ff @(posedge clk_camera) begin
-   cam_red <= (camera_valid)? {camera_pixel[15:11], 3'b0}: cam_red;
-   cam_green <= (camera_valid)? {camera_pixel[10:4], 3'b0}: cam_green;
-   cam_blue <= (camera_valid)? {camera_pixel[4:0], 3'b0}: cam_blue;
-end
+   always_ff @(posedge clk_camera) begin
+      cam_red <= (camera_valid)? {camera_pixel[15:11], 3'b0}: cam_red;
+      cam_green <= (camera_valid)? {camera_pixel[10:4], 3'b0}: cam_green;
+      cam_blue <= (camera_valid)? {camera_pixel[4:0], 3'b0}: cam_blue;
+   end
 
-rgb_to_ycrcb rgbtoycrcb_m (
-   .clk_in(clk_camera),
-   .r_in(cam_red),
-   .g_in(cam_green),
-   .b_in(cam_blue),
-   .y_out(y_full),
-   .cr_out(cr_full),
-   .cb_out(cb_full)
-);
+   rgb_to_ycrcb rgbtoycrcb_m (
+      .clk_in(clk_camera),
+      .r_in(cam_red),
+      .g_in(cam_green),
+      .b_in(cam_blue),
+      .y_out(y_full),
+      .cr_out(cr_full),
+      .cb_out(cb_full)
+   );
 
-//threshold module (apply masking threshold):
-logic [7:0] lower_threshold;
-logic [7:0] upper_threshold;
-logic mask; //Whether or not thresholded pixel is 1 or 0
+   //threshold module (apply masking threshold):
+   logic [7:0] lower_threshold;
+   logic [7:0] upper_threshold;
+   logic mask; //Whether or not thresholded pixel is 1 or 0
 
-// hardcoding pink color detection 
-assign lower_threshold = 8'hA0;
-assign upper_threshold = 8'hF0;
+   // hardcoding pink color detection 
+   assign lower_threshold = 8'hA0;
+   assign upper_threshold = 8'hF0;
 
-// hardcoding cr channel, no channel_select module!
-logic [7:0] cr_channel;
-logic [7:0] y_channel;
-assign cr_channel = {!cr_full[7],cr_full[6:0]}; 
-assign y_channel = y_full[7:0];
+   // hardcoding cr channel, no channel_select module!
+   logic [7:0] cr_channel;
+   logic [7:0] y_channel;
+   assign cr_channel = {!cr_full[7],cr_full[6:0]}; 
+   assign y_channel = y_full[7:0];
 
-//Thresholder: Takes in the full selected channedl and
-//based on upper and lower bounds provides a binary mask bit
-// * 1 if selected channel is within the bounds (inclusive)
-// * 0 if selected channel is not within the bounds
-threshold mt(
-   .clk_in(clk_camera),
-   .rst_in(sys_rst_camera),
-   .pixel_in(cr_channel),
-   .lower_bound_in(lower_threshold),
-   .upper_bound_in(upper_threshold),
-   .mask_out(mask) //single bit if pixel within mask.
-);
+   logic [7:0] y_channel_pipe [9:0];
+
+   pipeline #(
+   .PIPE_SIZE(8),
+   .STAGES_NEEDED(10)
+   ) y_channel_piper (
+   .clk_in(clk_pixel),
+   .wire_in(y_channel),
+   .wire_pipe_out(y_channel_pipe)
+   );
+
+   //Thresholder: Takes in the full selected channedl and
+   //based on upper and lower bounds provides a binary mask bit
+   // * 1 if selected channel is within the bounds (inclusive)
+   // * 0 if selected channel is not within the bounds
+   threshold mt(
+      .clk_in(clk_camera),
+      .rst_in(sys_rst_camera),
+      .pixel_in(cr_channel),
+      .lower_bound_in(lower_threshold),
+      .upper_bound_in(upper_threshold),
+      .mask_out(mask) //single bit if pixel within mask.
+   );
+   
+   logic mask_pipe [8:0];
+
+   pipeline #(
+   .PIPE_SIZE(1),
+   .STAGES_NEEDED(9)
+   ) mask_piper (
+   .clk_in(clk_pixel),
+   .wire_in(mask),
+   .wire_pipe_out(mask_pipe)
+   );
 
    // logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
 
@@ -214,10 +268,10 @@ threshold mt(
    center_of_mass com_m(
       .clk_in(clk_camera),
       .rst_in(sys_rst_camera),
-      .x_in(camera_hcount), 
-      .y_in(camera_vcount),
+      .x_in(camera_hcount_pipe[4]), 
+      .y_in(camera_vcount_pipe[4]),
       .valid_in(mask), //aka threshold
-      .tabulate_in(camera_hcount==1279 && camera_vcount==719), // need to change
+      .tabulate_in(camera_hcount_pipe[4]==1279 && camera_vcount_pipe[4]==719), // need to change
       .x_out(x_com_calc),
       .y_out(y_com_calc),
       .valid_out(new_com)
@@ -242,6 +296,37 @@ threshold mt(
       ch_green = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
       ch_blue  = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
    end
+
+   logic [7:0] ch_red_pipe [8:0];
+   logic [7:0] ch_green_pipe [8:0];
+   logic [7:0] ch_blue_pipe [8:0];
+
+   pipeline #(
+   .PIPE_SIZE(8),
+   .STAGES_NEEDED(9)
+   ) ch_red_piper (
+   .clk_in(clk_pixel),
+   .wire_in(ch_red),
+   .wire_pipe_out(ch_red_pipe)
+   );
+
+   pipeline #(
+   .PIPE_SIZE(8),
+   .STAGES_NEEDED(9)
+   ) ch_green_piper (
+   .clk_in(clk_pixel),
+   .wire_in(ch_green),
+   .wire_pipe_out(ch_green_pipe)
+   );
+
+   pipeline #(
+   .PIPE_SIZE(8),
+   .STAGES_NEEDED(9)
+   ) ch_blue_piper (
+   .clk_in(clk_pixel),
+   .wire_in(ch_blue),
+   .wire_pipe_out(ch_blue_pipe)
+   );
 
 
 // Baton tracker & BPM_________________________________________________________________________________
@@ -428,8 +513,8 @@ assign ss1_c = ss_c;
    logic staff_val;
 
    staff_creation my_staff 
-   ( .hcount(camera_hcount),
-   .vcount(camera_vcount),
+   ( .hcount(camera_hcount_pipe[6]),
+   .vcount(camera_vcount_pipe[6]),
    .bpm(bpm),
    .received_note(received_note_out),
    .clk_camera_in(clk_camera),
@@ -441,16 +526,16 @@ assign ss1_c = ss_c;
 
 // Video signal generator_________________________________________________________________________________
 
-logic          hsync_hdmi;
-logic          vsync_hdmi;
-logic [10:0]  hcount_hdmi;
-logic [9:0]    vcount_hdmi;
-logic          active_draw_hdmi;
-logic          new_frame_hdmi;
-logic [5:0]    frame_count_hdmi;
-logic          nf_hdmi;
+   logic          hsync_hdmi;
+   logic          vsync_hdmi;
+   logic [10:0]  hcount_hdmi;
+   logic [9:0]    vcount_hdmi;
+   logic          active_draw_hdmi;
+   logic          new_frame_hdmi;
+   logic [5:0]    frame_count_hdmi;
+   logic          nf_hdmi;
 
-video_sig_gen vsg
+   video_sig_gen vsg
    (.pixel_clk_in(clk_pixel),
    .rst_in(sys_rst_pixel),
    .hcount_out(hcount_hdmi),
@@ -521,7 +606,7 @@ always_ff @(posedge clk_camera)begin
    if (camera_vcount[1:0] == 0 && camera_hcount[1:0] == 0 && camera_valid) begin // every 4 addresses are "valid" for 4x downscaling
       valid_camera_mem <= camera_valid;
       addra_cam <= {5'b0, (camera_vcount>>2)}*320 + {4'b0,(camera_hcount>>2)};
-      camera_mem <= camera_pixel;
+      camera_mem <= val_cam_pixel[9];
    end else begin
       valid_camera_mem <= 0;
    end
@@ -561,9 +646,9 @@ blk_mem_gen_0 frame_buffer_cam (
    video_mux mvm(
       .bg_in(display_choice), //choose background
       .staff_pixel_in(0), //TODO: needs (PS2)staff_buff_raw
-      .camera_y_in(y_channel), //luminance TODO: needs (PS6)
-      .thresholded_pixel_in(mask), //one bit mask signal TODO: needs (PS4)
-      .crosshair_in({ch_red, ch_green, ch_blue}), //TODO: needs (PS8)
+      .camera_y_in(y_channel_pipe[9]), //luminance TODO: needs (PS6)
+      .thresholded_pixel_in(mask[8]), //one bit mask signal TODO: needs (PS4)
+      .crosshair_in({ch_red[8], ch_green[8], ch_blue[8]}), //TODO: needs (PS8)
       .camera_pixel_in({frame_buff_raw[15:11], frame_buff_raw[10:5], frame_buff_raw[4:0]}), //TODO: needs (PS8)
       // .camera_pixel_in({cam_red, cam_green, cam_blue}), //TODO: needs (PS8)
       .pixel_out({red,green,blue}) //output to tmds
