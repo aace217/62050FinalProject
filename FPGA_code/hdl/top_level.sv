@@ -106,7 +106,9 @@ module top_level (
       );
 
    logic [15:0] val_cam_pixel;
-   assign val_cam_pixel = (camera_valid)? camera_pixel: 16'b0;
+   always_ff @(posedge clk_camera) begin
+      val_cam_pixel <= (camera_valid)? camera_pixel: val_cam_pixel;
+   end
 
    //logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
 
@@ -128,9 +130,11 @@ module top_level (
 logic [9:0] y_full, cr_full, cb_full; //ycrcb conversion of full pixel
 logic [7:0] cam_red, cam_green, cam_blue;
 
-assign cam_red = (camera_valid)? {camera_pixel[15:11], 3'b0}: 8'b0;
-assign cam_green = (camera_valid)? {camera_pixel[10:4], 3'b0}: 8'b0;
-assign cam_blue = (camera_valid)? {camera_pixel[4:0], 3'b0}: 8'b0;
+always_ff @(posedge clk_camera) begin
+   cam_red <= (camera_valid)? {camera_pixel[15:11], 3'b0}: cam_red;
+   cam_green <= (camera_valid)? {camera_pixel[10:4], 3'b0}: cam_green;
+   cam_blue <= (camera_valid)? {camera_pixel[4:0], 3'b0}: cam_blue;
+end
 
 rgb_to_ycrcb rgbtoycrcb_m (
    .clk_in(clk_camera),
@@ -170,6 +174,19 @@ threshold mt(
    .mask_out(mask) //single bit if pixel within mask.
 );
 
+   // logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
+
+   // seven_segment_controller pixel_display_test
+   // (.clk_in(clk_camera),
+   // .rst_in(sys_rst_camera),
+   // // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
+   // .val_in({camera_d_buf[0], val_cam_pixel, cam_red}),
+   // .cat_out(ss_c),
+   // .an_out({ss0_an, ss1_an})
+   // );
+
+   // assign ss0_c = ss_c; //control upper four digit's cathodes!
+   // assign ss1_c = ss_c; //same as above but for lower four digits!
 
 // Seven segment controller_________________________________________________________________________________
    // logic [6:0] ss_c;
@@ -304,11 +321,12 @@ threshold mt(
    logic [7:0] velocity_out,received_note_out;
    logic [3:0] channel_out;
    logic midi_msg_type,midi_data_ready,midi_burst_ready;
-   logic [31:0] burst_on [3:0];
-   logic [31:0] burst_off [3:0];
-   logic [31:0] ss_var [3:0];
+   logic [31:0] burst_on [4:0];
+   logic [31:0] burst_off [4:0];
+   logic [31:0] ss_var [4:0];
    logic burst_ready;
-   
+   logic [23:0] debug;
+   logic [10:0] count;
 
    midi_decode midi_decoder(
       .midi_Data_in(midi_data_in),
@@ -320,6 +338,7 @@ threshold mt(
       .status(midi_msg_type),
       .data_ready_out(midi_data_ready)
    );
+
    // note that midi_burst will not always take BURST_DURATION CYCLES
    // If it receives 5 notes before BURST_DURATION CYCLES,
    // then it will output its data
@@ -340,6 +359,7 @@ logic [6:0] ss_c;
 always_ff @(posedge clk_camera)begin
    if(burst_ready)begin
       ss_var <= burst_on;
+      count <= count + 1;
    end
 
 end
@@ -347,6 +367,7 @@ seven_segment_controller debug_ssc(
   .clk_in(clk_camera),
   .rst_in(sys_rst_camera),
   .val_in({ss_var[3][15:8],ss_var[2][15:8],ss_var[1][15:8],ss_var[0][15:8]}),
+  //.val_in(count),
   .cat_out(ss_c),
   .an_out({ss0_an, ss1_an})
 );
@@ -543,8 +564,8 @@ blk_mem_gen_0 frame_buffer_cam (
       .camera_y_in(y_channel), //luminance TODO: needs (PS6)
       .thresholded_pixel_in(mask), //one bit mask signal TODO: needs (PS4)
       .crosshair_in({ch_red, ch_green, ch_blue}), //TODO: needs (PS8)
-      // .camera_pixel_in({frame_buff_raw[15:11], frame_buff_raw[10:5], frame_buff_raw[4:0]}), //TODO: needs (PS8)
-      .camera_pixel_in({cam_red, cam_green, cam_blue}), //TODO: needs (PS8)
+      .camera_pixel_in({frame_buff_raw[15:11], frame_buff_raw[10:5], frame_buff_raw[4:0]}), //TODO: needs (PS8)
+      // .camera_pixel_in({cam_red, cam_green, cam_blue}), //TODO: needs (PS8)
       .pixel_out({red,green,blue}) //output to tmds
    );
 
