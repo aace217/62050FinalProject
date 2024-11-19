@@ -113,6 +113,16 @@ module top_level (
    logic [10:0] camera_hcount_pipe [11:0];
    logic [9:0]  camera_vcount_pipe [11:0];
    logic [15:0] val_cam_pixel_pipe [9:0];
+   logic        camera_valid [9:0];
+   
+   pipeline #(
+   .PIPE_SIZE(1),
+   .STAGES_NEEDED(10)
+   ) camera_valid_piper (
+   .clk_in(clk_pixel),
+   .wire_in(camera_valid),
+   .wire_pipe_out(camera_valid_pipe)
+   );
 
    pipeline #(
    .PIPE_SIZE(16),
@@ -122,7 +132,6 @@ module top_level (
    .wire_in(val_cam_pixel),
    .wire_pipe_out(val_cam_pixel_pipe)
    );
-
 
    pipeline #(
    .PIPE_SIZE(11),
@@ -615,13 +624,9 @@ logic [1:0] staff_mem; //used to pass pixel data into frame buffer; black & whit
 
    always_ff @(posedge clk_camera)begin
       // addra logic
-      if (camera_vcount_pipe[1][1:0] == 0 && camera_hcount_pipe[1][1:0] == 0 && camera_valid) begin // every 4 addresses are "valid" for 4x downscaling
-         valid_camera_mem <= camera_valid;
-         addra_cam <= {5'b0, (camera_vcount_pipe[1]>>2)}*320 + {4'b0,(camera_hcount_pipe[1]>>2)};
-         camera_mem <= val_cam_pixel[1]; // usually supposed to be 9, but we're circumventing all of the staff logic
-      end else begin
-         valid_camera_mem <= 0;
-      end
+      valid_camera_mem <= camera_valid_pipe[1];
+      camera_mem <= val_cam_pixel_pipe[1]; // usually supposed to be 9, but we're circumventing all of the staff logic
+      addra_cam <= {5'b0, (camera_vcount_pipe[1]>>2)}*320 + {4'b0,(camera_hcount_pipe[1]>>2)};
       addra_cam_buf <= addra_cam;
    end
 
