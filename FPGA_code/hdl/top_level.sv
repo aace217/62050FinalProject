@@ -46,6 +46,7 @@ module top_level (
    logic          sys_rst_pixel;
 
    logic          clk_camera;
+   logic          clk_pixel_raw;
    logic          clk_pixel;
    logic          clk_5x;
    logic          clk_xc;
@@ -55,7 +56,7 @@ module top_level (
    cw_hdmi_clk_wiz wizard_hdmi
       (.sysclk(clk_100_passthrough),  // input
        .reset(0),                      // input
-       .clk_pixel(clk_pixel),          // output
+       .clk_pixel(clk_pixel_raw),          // output
        .clk_tmds(clk_5x)              // output
       );                    
 
@@ -68,6 +69,7 @@ module top_level (
       );                    
 
    assign cam_xclk = sw[1] ? clk_xc : 1'b0;
+   assign clk_pixel = sw[2] ? clk_pixel_raw : 1'b0;
 
    assign sys_rst_camera = btn[0]; //use for resetting camera side of logic
    assign sys_rst_pixel = btn[0]; //use for resetting hdmi/draw side of logic
@@ -113,7 +115,7 @@ module top_level (
    logic [10:0] camera_hcount_pipe [11:0];
    logic [9:0]  camera_vcount_pipe [11:0];
    logic [15:0] val_cam_pixel_pipe [9:0];
-   logic        camera_valid [9:0];
+   logic        camera_valid_pipe [9:0];
    
    pipeline #(
    .PIPE_SIZE(1),
@@ -237,19 +239,7 @@ module top_level (
    .wire_pipe_out(mask_pipe)
    );
 
-   // logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
 
-   // seven_segment_controller pixel_display_test
-   // (.clk_in(clk_camera),
-   // .rst_in(sys_rst_camera),
-   // // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   // .val_in({camera_d_buf[0], val_cam_pixel, cam_red}),
-   // .cat_out(ss_c),
-   // .an_out({ss0_an, ss1_an})
-   // );
-
-   // assign ss0_c = ss_c; //control upper four digit's cathodes!
-   // assign ss1_c = ss_c; //same as above but for lower four digits!
 
 // Seven segment controller_________________________________________________________________________________
    // logic [6:0] ss_c;
@@ -449,7 +439,7 @@ module top_level (
       .burst_ready_out(burst_ready)
    );
 //seven segment for debugging
-logic [6:0] ss_c;
+// logic [6:0] ss_c;
 always_ff @(posedge clk_camera)begin
    if(burst_ready)begin
       ss_var <= burst_on;
@@ -457,16 +447,16 @@ always_ff @(posedge clk_camera)begin
    end
 
 end
-seven_segment_controller debug_ssc(
-  .clk_in(clk_camera),
-  .rst_in(sys_rst_camera),
-  .val_in({ss_var[3][15:8],ss_var[2][15:8],ss_var[1][15:8],ss_var[0][15:8]}),
-  //.val_in(count),
-  .cat_out(ss_c),
-  .an_out({ss0_an, ss1_an})
-);
-assign ss0_c = ss_c;
-assign ss1_c = ss_c;
+// seven_segment_controller debug_ssc(
+//   .clk_in(clk_camera),
+//   .rst_in(sys_rst_camera),
+//   .val_in({ss_var[3][15:8],ss_var[2][15:8],ss_var[1][15:8],ss_var[0][15:8]}),
+//   //.val_in(count),
+//   .cat_out(ss_c),
+//   .an_out({ss0_an, ss1_an})
+// );
+// assign ss0_c = ss_c;
+// assign ss1_c = ss_c;
 // seven segment for debugging
 // logic [6:0] ss_c;
 // seven_segment_controller debug_ssc(
@@ -626,7 +616,7 @@ logic [1:0] staff_mem; //used to pass pixel data into frame buffer; black & whit
       // addra logic
       valid_camera_mem <= camera_valid_pipe[1];
       camera_mem <= val_cam_pixel_pipe[1]; // usually supposed to be 9, but we're circumventing all of the staff logic
-      addra_cam <= {5'b0, (camera_vcount_pipe[1]>>2)}*320 + {4'b0,(camera_hcount_pipe[1]>>2)};
+      addra_cam <= {5'b0, (camera_vcount_pipe[1])}*320 + {4'b0,(camera_hcount_pipe[1])};
       addra_cam_buf <= addra_cam;
    end
 
@@ -661,6 +651,9 @@ logic [1:0] staff_mem; //used to pass pixel data into frame buffer; black & whit
       frame_buff_valid <= addrbp2? frame_buff_raw:16'b0;
    end
 
+
+
+   
 // HDMI Video Out_________________________________________________________________________________
 
    // Video Mux: select from the different display modes based on switch values
@@ -670,6 +663,7 @@ logic [1:0] staff_mem; //used to pass pixel data into frame buffer; black & whit
 
    assign display_choice = sw[4];
    logic [7:0]          red,green,blue;
+   logic [23:0]          video_mux_out;
 
    video_mux mvm(
       .bg_in(display_choice), //choose background
@@ -678,10 +672,32 @@ logic [1:0] staff_mem; //used to pass pixel data into frame buffer; black & whit
       .thresholded_pixel_in(mask_pipe[0]), // 8, one bit mask signal TODO: needs (PS4)
       // .crosshair_in({ch_red_pipe[8], ch_green_pipe[8], ch_blue_pipe[8]}), //TODO: needs (PS8)
       .crosshair_in({ch_red_pipe[0], ch_green_pipe[0], ch_blue_pipe[0]}), //TODO: needs (PS8)
-      .camera_pixel_in({frame_buff_valid[15:11], frame_buff_valid[10:5], frame_buff_valid[4:0]}), //TODO: needs (PS8)
-      // .camera_pixel_in({cam_red, cam_green, cam_blue}), //TODO: needs (PS8)
-      .pixel_out({red,green,blue}) //output to tmds
+      .camera_pixel_in({frame_buff_valid[15:11], 3'b0, frame_buff_valid[10:5], 2'b0, frame_buff_valid[4:0], 3'b0}), //TODO: needs (PS8)
+      // .pixel_out(video_mux_out) //output to tmds
+      .pixel_out({red,green,blue})
    );
+
+   // always_ff @(posedge clk_pixel) begin
+   //    red <= video_mux_out[23:16];
+   //    green <= video_mux_out[15:8];
+   //    blue <= video_mux_out[7:0];
+   // end
+
+
+   logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
+
+   seven_segment_controller pixel_display_test
+   (.clk_in(clk_camera),
+   .rst_in(sys_rst_camera),
+   // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
+   .val_in({red, green, blue, 8'b0}),
+   .cat_out(ss_c),
+   .an_out({ss0_an, ss1_an})
+   );
+
+   assign ss0_c = ss_c; //control upper four digit's cathodes!
+   assign ss1_c = ss_c; //same as above but for lower four digits!
+
 
 
    // HDMI Output: just like before!
