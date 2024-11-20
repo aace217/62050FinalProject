@@ -13,7 +13,15 @@ module staff_creation (
 );
 
 assign staff_out = 0;
-assign staff_valid = 0;
+
+logic buf1, buf2, buf3;
+
+always_ff @(posedge clk_camera_in) begin
+    buf1 <= 1;
+    buf2 <= 2;
+    buf3 <= buf2;
+    staff_valid <= buf3;
+end
 
 endmodule
 

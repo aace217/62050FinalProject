@@ -114,23 +114,23 @@ module top_level (
 
    logic [10:0] camera_hcount_pipe [11:0];
    logic [9:0]  camera_vcount_pipe [11:0];
-   logic [15:0] val_cam_pixel_pipe [9:0];
-   logic        camera_valid_pipe [9:0];
+   logic [15:0] val_cam_pixel_pipe [11:0];
+   logic        camera_valid_pipe [12:0];
    
    pipeline #(
    .PIPE_SIZE(1),
-   .STAGES_NEEDED(10)
+   .STAGES_NEEDED(13)
    ) camera_valid_piper (
-   .clk_in(clk_pixel),
+   .clk_in(clk_camera),
    .wire_in(camera_valid),
    .wire_pipe_out(camera_valid_pipe)
    );
 
    pipeline #(
    .PIPE_SIZE(16),
-   .STAGES_NEEDED(10)
+   .STAGES_NEEDED(12)
    ) val_cam_pixel_piper (
-   .clk_in(clk_pixel),
+   .clk_in(clk_camera),
    .wire_in(val_cam_pixel),
    .wire_pipe_out(val_cam_pixel_pipe)
    );
@@ -204,13 +204,13 @@ module top_level (
    assign cr_channel = {!cr_full[7],cr_full[6:0]}; 
    assign y_channel = y_full[7:0];
 
-   logic [7:0] y_channel_pipe [9:0];
+   logic [7:0] y_channel_pipe [12:0];
 
    pipeline #(
    .PIPE_SIZE(8),
-   .STAGES_NEEDED(10)
+   .STAGES_NEEDED(13)
    ) y_channel_piper (
-   .clk_in(clk_pixel),
+   .clk_in(clk_camera),
    .wire_in(y_channel),
    .wire_pipe_out(y_channel_pipe)
    );
@@ -228,13 +228,13 @@ module top_level (
       .mask_out(mask) //single bit if pixel within mask.
    );
    
-   logic mask_pipe [8:0];
+   logic mask_pipe [11:0];
 
    pipeline #(
    .PIPE_SIZE(1),
-   .STAGES_NEEDED(9)
+   .STAGES_NEEDED(12)
    ) mask_piper (
-   .clk_in(clk_pixel),
+   .clk_in(clk_camera),
    .wire_in(mask),
    .wire_pipe_out(mask_pipe)
    );
@@ -296,33 +296,33 @@ module top_level (
       ch_blue  = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
    end
 
-   logic [7:0] ch_red_pipe [8:0];
-   logic [7:0] ch_green_pipe [8:0];
-   logic [7:0] ch_blue_pipe [8:0];
+   logic [7:0] ch_red_pipe [10:0];
+   logic [7:0] ch_green_pipe [10:0];
+   logic [7:0] ch_blue_pipe [10:0];
 
    pipeline #(
    .PIPE_SIZE(8),
-   .STAGES_NEEDED(9)
+   .STAGES_NEEDED(11)
    ) ch_red_piper (
-   .clk_in(clk_pixel),
+   .clk_in(clk_camera),
    .wire_in(ch_red),
    .wire_pipe_out(ch_red_pipe)
    );
 
    pipeline #(
    .PIPE_SIZE(8),
-   .STAGES_NEEDED(9)
+   .STAGES_NEEDED(11)
    ) ch_green_piper (
-   .clk_in(clk_pixel),
+   .clk_in(clk_camera),
    .wire_in(ch_green),
    .wire_pipe_out(ch_green_pipe)
    );
 
    pipeline #(
    .PIPE_SIZE(8),
-   .STAGES_NEEDED(9)
+   .STAGES_NEEDED(11)
    ) ch_blue_piper (
-   .clk_in(clk_pixel),
+   .clk_in(clk_camera),
    .wire_in(ch_blue),
    .wire_pipe_out(ch_blue_pipe)
    );
@@ -508,12 +508,12 @@ end
 
 // Staff Creation & Image Sprite_________________________________________________________________________________
 
-   logic [1:0] staff_pixel;
-   logic staff_val;
+   logic [1:0] staff_pixel, staff_pixel_buf;
+   logic staff_val, staff_val_buf;
 
    staff_creation my_staff 
-   ( .hcount(camera_hcount_pipe[6]),
-   .vcount(camera_vcount_pipe[6]),
+   ( .hcount(camera_hcount_pipe[7]),
+   .vcount(camera_vcount_pipe[7]),
    .bpm(bpm),
    .received_note(received_note_out),
    .clk_camera_in(clk_camera),
@@ -521,6 +521,11 @@ end
    .staff_out(staff_pixel),
    .staff_valid(staff_val)
    );
+
+   always_ff @(posedge clk_camera)begin
+      staff_pixel_buf <= staff_pixel;
+      staff_val_buf <= staff_val;
+   end
 
 
 // Video signal generator_________________________________________________________________________________
@@ -553,89 +558,85 @@ end
       vcount_hdmi_buf <= vcount_hdmi;
    end
 
-// Frame Buffer (Staff)_________________________________________________________________________________
+// Video MUX _________________________________________________________________________________
 
-localparam FB_DEPTH = 320*180;
-localparam FB_SIZE = $clog2(FB_DEPTH); // 15
-logic [FB_SIZE-1:0] addra_staff; //used to specify address to write to in frame buffer
+ // Video Mux: select from the different display modes based on switch values
+   //used with switches for display selections
 
-logic valid_staff_mem; //used to enable writing pixel data to frame buffer
-logic [1:0] staff_mem; //used to pass pixel data into frame buffer; black & white
+   logic [1:0] target_choice;
+   logic [1:0] display_choice;
+   assign display_choice = sw[4:3];
 
-// logic [1:0] staff_buff_raw; //data out of frame buffer; black & white
-// logic [FB_SIZE-1:0] addrb_staff; //used to lookup address in memory for reading from buffer
-// logic good_addrb_staff; //used to indicate within valid frame for scaling
+   // logic [7:0]          red,green,blue;
+   // logic [23:0]          video_mux_out;
 
-// always_ff @(posedge clk_camera)begin
-//    // addra logic
-//    if (camera_vcount[1:0] == 0 && camera_hcount[1:0] == 0 && staff_val) begin // every 4 addresses are "valid" for 4x downscaling
-//       valid_staff_mem <= staff_val;
-//       addra_staff <= {5'b0, (camera_vcount>>2)}*320 + {4'b0,(camera_hcount>>2)};
-//       staff_mem <= staff_pixel;
-//    end else begin
-//       valid_staff_mem <= 0;
-//    end
+   // to send to BRAM
+   logic valid_mem;
+   logic [15:0] pixel_mem;
 
-//    //addrb logic
-//    addrb_staff <= {5'b0, vcount_hdmi_buf>>2}*320 + {4'b0,hcount_hdmi_buf>>2};
-//    good_addrb_staff <=(hcount_hdmi_buf<1280)&&(vcount_hdmi_buf<720);
-// end
+   video_mux mvm(
+      .clk_in(clk_camera),
+      .bg_in(display_choice), //choose background
+      .staff_pixel_in(staff_pixel_buf),
+      .staff_pixel_val(staff_val_buf),
+      .camera_pixel_in(val_cam_pixel_pipe[11]),
+      .camera_pixel_val(camera_valid_pipe[12]),
+      .y_in(y_channel_pipe[8]), // luminance
+      .thresholded_pixel_in(mask_pipe[7]), // one bit mask signal
+      .crosshair_in({ch_red_pipe[6], ch_green_pipe[6], ch_blue_pipe[6]}), 
+      .pixel_out(pixel_mem),
+      .valid_out(valid_mem)
+   );
 
-// //frame buffer from IP
-// blk_mem_gen_0 frame_buffer_staff (
-//    .addra(addra_staff), //pixels are stored using this math
-//    .clka(clk_camera),
-//    .wea(valid_staff_mem),
-//    .dina(staff_mem),
-//    .ena(1'b1),
-//    .douta(), //never read from this side
-//    .addrb(addrb_staff),//transformed lookup pixel
-//    .dinb(16'b0),
-//    .clkb(clk_pixel),
-//    .web(1'b0),
-//    .enb(1'b1),
-//    .doutb(staff_buff_raw)
-// );
-// Frame Buffer (Camera)_________________________________________________________________________________
 
-   logic [FB_SIZE-1:0] addra_cam; //used to specify address to write to in frame buffer
+// Frame Buffer _________________________________________________________________________________
 
-   logic valid_camera_mem; //used to enable writing pixel data to frame buffer
-   logic [15:0] camera_mem; //used to pass pixel data into frame buffer; black & white
+   localparam FB_DEPTH = 320*180;
+   localparam FB_SIZE = $clog2(FB_DEPTH); // 15
+   logic [FB_SIZE-1:0] addra; //used to specify address to write to in frame buffer
+   logic [FB_SIZE-1:0] addrb; //used to lookup address in memory for reading from buffer
+   logic [FB_SIZE-1:0] addra_buf; //used to specify address to write to in frame buffer
+   logic [FB_SIZE-1:0] addrb_buf; //used to lookup address in memory for reading from buffer
+   logic good_addrb; //used to indicate within valid frame for scaling
 
    logic [15:0] frame_buff_raw; //data out of frame buffer; black & white
-   logic [15:0] frame_buff_valid; //data out of frame buffer; black & white
-   logic [FB_SIZE-1:0] addrb_cam; //used to lookup address in memory for reading from buffer
-   logic good_addrb_cam; //used to indicate within valid frame for scaling
+   logic [23:0] frame_buff_valid; //data out of frame buffer; black & white
 
-   logic [FB_SIZE-1:0] addra_cam_buf; //used to lookup address in memory for reading from buffer
-   logic [FB_SIZE-1:0] addrb_cam_buf; //used to lookup address in memory for reading from buffer
-
-
-   always_ff @(posedge clk_camera)begin
+   always_ff @(posedge clk_camera) begin
       // addra logic
-      valid_camera_mem <= camera_valid_pipe[1];
-      camera_mem <= val_cam_pixel_pipe[1]; // usually supposed to be 9, but we're circumventing all of the staff logic
-      addra_cam <= {5'b0, (camera_vcount_pipe[1])}*320 + {4'b0,(camera_hcount_pipe[1])};
-      addra_cam_buf <= addra_cam;
+      addra <= {5'b0, (camera_vcount_pipe[11])}*320 + {4'b0,(camera_hcount_pipe[11])};
+      addra_buf <= addra;
    end
 
    always_ff @(posedge clk_pixel) begin
       //addrb logic
-      addrb_cam <= {5'b0, vcount_hdmi_buf>>2}*320 + {4'b0,hcount_hdmi_buf>>2};
-      good_addrb_cam <=(hcount_hdmi_buf<1280)&&(vcount_hdmi_buf<720);
-      addrb_cam_buf <= addrb_cam;
+      addrb <= {5'b0, vcount_hdmi_buf>>2}*320 + {4'b0,hcount_hdmi_buf>>2};
+      good_addrb <=(hcount_hdmi_buf<1280)&&(vcount_hdmi_buf<720);
+      addrb_buf <= addrb;
    end
+
+   // logic [FB_SIZE-1:0] addra_cam; //used to specify address to write to in frame buffer
+
+   // logic valid_camera_mem; //used to enable writing pixel data to frame buffer
+   // logic [15:0] camera_mem; //used to pass pixel data into frame buffer; black & white
+
+   // logic [15:0] frame_buff_raw; //data out of frame buffer; black & white
+   // logic [FB_SIZE-1:0] addrb_cam; //used to lookup address in memory for reading from buffer
+   // logic good_addrb_cam; //used to indicate within valid frame for scaling
+
+   // logic [FB_SIZE-1:0] addra_cam_buf; //used to lookup address in memory for reading from buffer
+   // logic [FB_SIZE-1:0] addrb_cam_buf; //used to lookup address in memory for reading from buffer
+
 
    //frame buffer from IP
    blk_mem_gen_0 frame_buffer_cam (
-      .addra(addra_cam_buf), //pixels are stored using this math
+      .addra(addra_buf), //pixels are stored using this math
       .clka(clk_camera),
-      .wea(valid_camera_mem),
-      .dina(camera_mem),
+      .wea(valid_mem),
+      .dina(pixel_mem),
       .ena(1'b1),
       .douta(), //never read from this side
-      .addrb(addrb_cam_buf),//transformed lookup pixel
+      .addrb(addrb_buf),//transformed lookup pixel
       .dinb(16'b0),
       .clkb(clk_pixel),
       .web(1'b0),
@@ -644,45 +645,23 @@ logic [1:0] staff_mem; //used to pass pixel data into frame buffer; black & whit
    );
 
    logic addrbp1, addrbp2;
+   logic [7:0] red, green, blue;
 
    always_ff @(posedge clk_pixel)begin
-      addrbp1 <= good_addrb_cam;
+      addrbp1 <= good_addrb;
       addrbp2 <= addrbp1;
-      frame_buff_valid <= addrbp2? frame_buff_raw:16'b0;
+      frame_buff_valid <= addrbp2? {frame_buff_raw[15:11], 3'b0, frame_buff_raw[10:5], 2'b0, frame_buff_raw[4:0], 3'b0}:23'b0;
    end
 
-
-
+   always_comb begin
+      red = frame_buff_valid[23:16];
+      green = frame_buff_valid[15:8];
+      blue = frame_buff_valid[7:0];
+   end
    
 // HDMI Video Out_________________________________________________________________________________
 
-   // Video Mux: select from the different display modes based on switch values
-   //used with switches for display selections
-   logic [1:0] display_choice;
-   logic [1:0] target_choice;
-
-   assign display_choice = sw[4];
-   logic [7:0]          red,green,blue;
-   logic [23:0]          video_mux_out;
-
-   video_mux mvm(
-      .bg_in(display_choice), //choose background
-      .staff_pixel_in(0), //TODO: needs (PS2)staff_buff_raw
-      .camera_y_in(y_channel_pipe[1]), // 9, luminance TODO: needs (PS6)
-      .thresholded_pixel_in(mask_pipe[0]), // 8, one bit mask signal TODO: needs (PS4)
-      // .crosshair_in({ch_red_pipe[8], ch_green_pipe[8], ch_blue_pipe[8]}), //TODO: needs (PS8)
-      .crosshair_in({ch_red_pipe[0], ch_green_pipe[0], ch_blue_pipe[0]}), //TODO: needs (PS8)
-      .camera_pixel_in({frame_buff_valid[15:11], 3'b0, frame_buff_valid[10:5], 2'b0, frame_buff_valid[4:0], 3'b0}), //TODO: needs (PS8)
-      // .pixel_out(video_mux_out) //output to tmds
-      .pixel_out({red,green,blue})
-   );
-
-   // always_ff @(posedge clk_pixel) begin
-   //    red <= video_mux_out[23:16];
-   //    green <= video_mux_out[15:8];
-   //    blue <= video_mux_out[7:0];
-   // end
-
+  
 
    logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
 
@@ -690,7 +669,7 @@ logic [1:0] staff_mem; //used to pass pixel data into frame buffer; black & whit
    (.clk_in(clk_camera),
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({red, green, blue, 8'b0}),
+   .val_in({frame_buff_valid, 8'b0}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );

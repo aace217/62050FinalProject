@@ -2,20 +2,38 @@
 `default_nettype none
 
 module video_mux(
-  input wire bg_in, //regular video
-  input wire [1:0] staff_pixel_in, //16 bits from camera 5:6:5
-  input wire [7:0] camera_y_in,  //y channel of ycrcb camera conversion
-  input wire [23:0] camera_pixel_in,
+  input wire clk_in,
+  input wire [1:0] bg_in, //regular video
+  input wire [1:0] staff_pixel_in,
+  input wire staff_pixel_val,
+  input wire [15:0] camera_pixel_in,
+  input wire camera_pixel_val,
+  input wire [7:0] y_in,  //y channel of ycrcb camera conversion
   input wire thresholded_pixel_in, //
   input wire crosshair_in,
-  output logic [23:0] pixel_out
+  output logic [15:0] pixel_out,
+  output logic valid_out
 );
 
-  always_comb begin
+  always_ff @(posedge clk_in) begin
+    
     case(bg_in)
-      // 0: pixel_out = (crosshair_in)? 24'h00FF00 : (thresholded_pixel_in != 0) ? 24'hFF77AA : {camera_y_in,camera_y_in,camera_y_in}; 
-      1: pixel_out = {24{staff_pixel_in}};
-      0: pixel_out = camera_pixel_in;
+      0: begin // staff
+        pixel_out <= {16{staff_pixel_in}};
+        valid_out <= staff_pixel_val;
+      end
+      1: begin // camera
+        pixel_out <= camera_pixel_in;
+        valid_out <= camera_pixel_val;
+      end
+      2: begin // another camerea
+        pixel_out <= camera_pixel_in;
+        valid_out <= camera_pixel_val;
+      end
+      3: begin // camera with crosshair and mask
+        pixel_out = (crosshair_in)? 16'h07e0 : (thresholded_pixel_in)? 16'hFBB5 : {y_in[7:3],y_in[7:2],y_in[7:3]}; 
+        valid_out <= camera_pixel_val;    
+      end
     endcase
   end
 
