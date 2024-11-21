@@ -175,7 +175,7 @@ module top_level (
 
    always_ff @(posedge clk_camera) begin
       cam_red <= (camera_valid)? {camera_pixel[15:11], 3'b0}: cam_red;
-      cam_green <= (camera_valid)? {camera_pixel[10:4], 3'b0}: cam_green;
+      cam_green <= (camera_valid)? {camera_pixel[10:5], 2'b0}: cam_green;
       cam_blue <= (camera_valid)? {camera_pixel[4:0], 3'b0}: cam_blue;
    end
 
@@ -195,7 +195,7 @@ module top_level (
    logic mask; //Whether or not thresholded pixel is 1 or 0
 
    // hardcoding pink color detection 
-   assign lower_threshold = 8'hA0;
+   assign lower_threshold = 8'b10100000; // may also consider x90 for a more lenient max
    assign upper_threshold = 8'hF0;
 
    // hardcoding cr channel, no channel_select module!
@@ -270,7 +270,7 @@ module top_level (
       .x_in(camera_hcount_pipe[4]), 
       .y_in(camera_vcount_pipe[4]),
       .valid_in(mask), //aka threshold
-      .tabulate_in(camera_hcount_pipe[4]==1279 && camera_vcount_pipe[4]==719), // need to change
+      .tabulate_in(camera_hcount_pipe[4]==319 && camera_vcount_pipe[4]==179), // need to change
       .x_out(x_com_calc),
       .y_out(y_com_calc),
       .valid_out(new_com)
@@ -669,7 +669,7 @@ end
    (.clk_in(clk_camera),
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({frame_buff_valid, 8'b0}),
+   .val_in({1'b0,x_com_calc, 7'b0, mask, 'b0, y_com_calc}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );

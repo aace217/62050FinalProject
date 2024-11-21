@@ -6,7 +6,7 @@ module pwm_combine(
             input wire rst_in,
             input wire midi_burst_ready_in,
             input wire [2:0] on_msg_count_in,
-            input logic [31:0] midi_burst_data_in [4:0],
+            input wire [31:0] midi_burst_data_in [4:0],
             output logic pwm_ready,
             output logic sig_out);
 
@@ -55,8 +55,8 @@ module pwm_combine(
                         // there is valid data, capture it
                         msg_count <= on_msg_count_in;
                         for(int i = 0; i<5;i = i + 1)begin
-                            note_value_array[i] <= midi_burst_data_in[i][15:8] // from the definition in midi burst
-                            note_velocity_array[i] <= midi_burst_data_in[i][7:0] // from the definition in midi_burst
+                            note_value_array[i] <= midi_burst_data_in[i][15:8]; // from the definition in midi burst
+                            note_velocity_array[i] <= midi_burst_data_in[i][7:0]; // from the definition in midi_burst
                         end
                         combine_state <= PROCESSING_DATA;
                     end
