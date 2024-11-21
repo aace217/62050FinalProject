@@ -370,32 +370,52 @@ module top_level (
    logic [15:0] full_message;
    logic new_message;
    logic uart_busy;
-   logic [3:0] uart_counter;
+   logic [3:0] uart_count;
+   logic beat_existed;
+   logic data_ready;
 
-   //sampling one of every two data points... may need to be changed
+   counter uart_counter (
+      .clk_in(clk_camera),
+      .rst_in(sys_rst_camera),
+      .period_in(1736),
+      .count_out(uart_count)
+   );
+
    always_ff @(posedge clk_camera) begin
-      if (sys_rst_camera) begin
-         new_message <= 1;
-         raw_message <= {y_com, 4'b0, beat_detected}; // updates every cycle
-         uart_counter <= 0;
+      if (uart_count == 0) begin
+         to_transmit <= {y_com[6:0], beat_detected};
+         beat_existed <= beat_detected;
+         data_ready <= 1;
       end else begin
-         if (uart_counter == 0) begin
-            to_transmit <= full_message[15:8];
-            full_message <= (new_message)? {y_com, 4'b0, beat_detected}: full_message << 8;
-            new_message <= !new_message;
-         end
-         uart_counter <= (uart_counter == 9)? 0 : uart_counter + 1;
+         beat_existed <= beat_existed | beat_detected;
+         data_ready <= 0;
       end
    end
 
+   //sampling one of every two data points... may need to be changed
+   // always_ff @(posedge clk_camera) begin
+   //    if (sys_rst_camera) begin
+   //       new_message <= 1;
+   //       raw_message <= {y_com, 4'b0, beat_detected}; // updates every cycle
+   //       uart_counter <= 0;
+   //    end else begin
+   //       if (uart_counter == 0) begin
+   //          to_transmit <= full_message[15:8];
+   //          full_message <= (new_message)? {y_com, 4'b0, beat_detected}: full_message << 8;
+   //          new_message <= !new_message;
+   //       end
+   //       uart_counter <= (uart_counter == 9)? 0 : uart_counter + 1;
+   //    end
+   // end
+
    uart_transmit #( // parameters copied from lab 3, potentially need to be changed
-      .INPUT_CLOCK_FREQ(100000000),
+      .INPUT_CLOCK_FREQ(200000000),
       .BAUD_RATE(115200)
    ) my_uart (
       .clk_in(clk_camera),
       .rst_in(sys_rst_camera),
       .data_byte_in(to_transmit),
-      .trigger_in(uart_counter == 0),
+      .trigger_in(data_ready),
       .busy_out(uart_busy),
       .tx_wire_out(uart_txd)
       );
@@ -669,7 +689,7 @@ end
    (.clk_in(clk_camera),
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({1'b0,x_com_calc, 7'b0, mask, 'b0, y_com_calc}),
+   .val_in({7'b0,beat_detected, 16'b0, bpm}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );
