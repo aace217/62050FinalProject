@@ -291,9 +291,9 @@ module top_level (
    // Crosshairs
    logic [7:0] ch_red, ch_green, ch_blue;
    always_comb begin
-      ch_red   = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
-      ch_green = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
-      ch_blue  = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
+      ch_red   = ((camera_vcount_pipe[4]==y_com) || (camera_hcount_pipe[4]==x_com))?8'hFF:8'h00;
+      ch_green = ((camera_vcount_pipe[4]==y_com) || (camera_hcount_pipe[4]==x_com))?8'hFF:8'h00;
+      ch_blue  = ((camera_vcount_pipe[4]==y_com) || (camera_hcount_pipe[4]==x_com))?8'hFF:8'h00;
    end
 
    logic [7:0] ch_red_pipe [10:0];
@@ -332,7 +332,7 @@ module top_level (
 
    logic [1:0] set_bpm;
    logic [1:0] set_bpm_buf;
-   assign set_bpm = sw[3:2];
+   assign set_bpm = sw[6:5];
    // sw == 00: don't set bpm
    // sw == 01: set bpm with baton
    // sw == 10: set bpm with switches 15-8
@@ -346,7 +346,7 @@ module top_level (
    assign manual_bpm =  sw[15:8];
 
    baton_tracker my_bt
-   ( .y_com_in(y_com),
+   ( .y_in(y_com),
    .measure_in(set_bpm == 2'b01),
    .rst_in(sys_rst_camera),
    .clk_camera_in(clk_camera),
@@ -370,20 +370,25 @@ module top_level (
    logic [15:0] full_message;
    logic new_message;
    logic uart_busy;
-   logic [3:0] uart_count;
+   logic [15:0] uart_count;
    logic beat_existed;
    logic data_ready;
+
+   // assign uart_count = (camera_vcount_pipe[4])*320 + (camera_hcount_pipe[4]);
 
    counter uart_counter (
       .clk_in(clk_camera),
       .rst_in(sys_rst_camera),
-      .period_in(1736),
+      .period_in(57600),
       .count_out(uart_count)
    );
 
    always_ff @(posedge clk_camera) begin
-      if (uart_count == 0) begin
-         to_transmit <= {y_com[6:0], beat_detected};
+      if (uart_count == 14400 && data_ready == 0) begin
+         to_transmit <= y_com[7:0];
+         data_ready <= 1;
+      end else if (uart_count == 43200 && data_ready == 0) begin
+         to_transmit <= {beat_existed, 7'b0};
          beat_existed <= beat_detected;
          data_ready <= 1;
       end else begin
@@ -410,7 +415,7 @@ module top_level (
 
    uart_transmit #( // parameters copied from lab 3, potentially need to be changed
       .INPUT_CLOCK_FREQ(200000000),
-      .BAUD_RATE(115200)
+      .BAUD_RATE(230400)
    ) my_uart (
       .clk_in(clk_camera),
       .rst_in(sys_rst_camera),
@@ -689,7 +694,7 @@ end
    (.clk_in(clk_camera),
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({7'b0,beat_detected, 16'b0, bpm}),
+   .val_in({31'b0, beat_detected}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );
