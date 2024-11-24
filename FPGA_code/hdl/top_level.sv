@@ -345,6 +345,16 @@ module top_level (
    logic [7:0] manual_bpm;
    assign manual_bpm =  sw[15:8];
 
+   // testing
+   logic [3:0] total_beats_detected;
+   always_ff @(posedge clk_camera) begin 
+      if (sys_rst_camera) begin
+         total_beats_detected <= 0;
+      end else begin 
+         total_beats_detected <= total_beats_detected + beat_detected;
+      end
+   end
+
    baton_tracker my_bt
    ( .y_in(y_com),
    .measure_in(set_bpm == 2'b01),
@@ -358,9 +368,9 @@ module top_level (
    .bpm_in(manual_bpm),
    .rst_in(sys_rst_camera),
    .clk_camera_in(clk_camera),
-   .valid_override_in(set_bpm_buf == 2'b10),
-   .measure_in(set_bpm_buf == 2'b01),
-   .bpm_out(bpm)
+   .set_bpm_in(set_bpm_buf),
+   .bpm_out(bpm),
+   .led_out(led[14:0])
    );
 
 // UART Transmit_________________________________________________________________________________
@@ -694,7 +704,7 @@ end
    (.clk_in(clk_camera),
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({31'b0, beat_detected}),
+   .val_in({bpm, 20'b0, total_beats_detected}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );
@@ -853,10 +863,10 @@ end
       .bram_addr(registers_addr));
 
    // a handful of debug signals for writing to registers
-   assign led[0] = crw.bus_active;
-   assign led[1] = cr_init_valid;
-   assign led[2] = cr_init_ready;
-   assign led[15:3] = 0;
+   // assign led[0] = crw.bus_active;
+   // assign led[1] = cr_init_valid;
+   // assign led[2] = cr_init_ready;
+   // assign led[15:3] = 0;
 
 endmodule // top_level
 

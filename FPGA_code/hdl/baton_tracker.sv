@@ -26,38 +26,26 @@ always_ff @(posedge clk_camera_in) begin
         prev_y_diff <= 0;
         prev_y_in <= 0;
         delta_t <= 0;
+        // stage <= 0;
     end else if (measure_in) begin
         if ($signed(delta_t) > $signed(threshold)) begin
-            if (y_diff == 0) begin
+            if ($signed(y_diff) >= -2 && $signed(y_diff) <= 2) begin
                 change_out <= 0;
-            end else if (($signed(y_diff) > 0 && $signed(prev_y_diff) < 0) || ($signed(y_diff) < 0 && $signed(prev_y_diff) > 0)) begin
+                // stage <= 4'b0111;
+                // prev_y_diff <= y_diff;
+            end else if (($signed(y_diff) < -2 && $signed(prev_y_diff) > 2)) begin //  || ($signed(y_diff) > 5 && $signed(prev_y_diff) < 5)
                 change_out <= 1;
                 prev_y_in <= y_in;
                 prev_y_diff <= y_diff;  
+                // stage <= 4'b1111;
             end else begin
                 change_out <= 0;
                 prev_y_in <= y_in;
                 prev_y_diff <= y_diff;  
+                // stage <= 4'b1010;
             end
         end
-        delta_t <= (($signed(y_diff) > 0 && $signed(prev_y_diff) < 0) || ($signed(y_diff) < 0 && $signed(prev_y_diff) > 0))? 0: delta_t + 1; // if change in sign, reset
-       
-        
-        // implementation of the derivative algorithm
-        // prev_y_in <= y_in;
-        // prev_y_diff <= y_diff;
-        // // if the old derivative 
-        // // wait something like 10k clock cycles to allow the noise to average itself out
-        // if (delta_t > threshold) begin
-        //     if ((prev_y_diff > 0)) begin // if signs are different, change_out is high
-        //         change_out <= 1; 
-        //         delta_t <= 0;
-        //     end else begin
-        //         change_out <= 0;
-        //         delta_t <= delta_t + 1;
-        //     end
-        // end
-
+        delta_t <= (($signed(y_diff) < -2 && $signed(prev_y_diff) > 2))? 0: delta_t + 1; // if change in sign, reset
     end
 end
 endmodule
