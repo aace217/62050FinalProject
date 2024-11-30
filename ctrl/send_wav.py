@@ -12,6 +12,7 @@ BAUD = 115200
 # opens input.wav, sends the data as a set of
 def send_wav(filename):
     with wave.open(filename,"rb") as wav_file:
+        print(f"This is the sample width:{wav_file.getsampwidth()}")
         assert wav_file.getnchannels() == 1
         assert wav_file.getsampwidth() == 1
         assert wav_file.getframerate() == 8000
