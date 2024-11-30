@@ -175,7 +175,7 @@ module top_level (
 
    always_ff @(posedge clk_camera) begin
       cam_red <= (camera_valid)? {camera_pixel[15:11], 3'b0}: cam_red;
-      cam_green <= (camera_valid)? {camera_pixel[10:4], 3'b0}: cam_green;
+      cam_green <= (camera_valid)? {camera_pixel[10:5], 2'b0}: cam_green;
       cam_blue <= (camera_valid)? {camera_pixel[4:0], 3'b0}: cam_blue;
    end
 
@@ -195,7 +195,7 @@ module top_level (
    logic mask; //Whether or not thresholded pixel is 1 or 0
 
    // hardcoding pink color detection 
-   assign lower_threshold = 8'hA0;
+   assign lower_threshold = 8'b10100000; // may also consider x90 for a more lenient max
    assign upper_threshold = 8'hF0;
 
    // hardcoding cr channel, no channel_select module!
@@ -270,7 +270,7 @@ module top_level (
       .x_in(camera_hcount_pipe[4]), 
       .y_in(camera_vcount_pipe[4]),
       .valid_in(mask), //aka threshold
-      .tabulate_in(camera_hcount_pipe[4]==1279 && camera_vcount_pipe[4]==719), // need to change
+      .tabulate_in(camera_hcount_pipe[4]==319 && camera_vcount_pipe[4]==179), // need to change
       .x_out(x_com_calc),
       .y_out(y_com_calc),
       .valid_out(new_com)
@@ -291,9 +291,9 @@ module top_level (
    // Crosshairs
    logic [7:0] ch_red, ch_green, ch_blue;
    always_comb begin
-      ch_red   = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
-      ch_green = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
-      ch_blue  = ((camera_vcount==y_com) || (camera_hcount==x_com))?8'hFF:8'h00;
+      ch_red   = ((camera_vcount_pipe[4]==y_com) || (camera_hcount_pipe[4]==x_com))?8'hFF:8'h00;
+      ch_green = ((camera_vcount_pipe[4]==y_com) || (camera_hcount_pipe[4]==x_com))?8'hFF:8'h00;
+      ch_blue  = ((camera_vcount_pipe[4]==y_com) || (camera_hcount_pipe[4]==x_com))?8'hFF:8'h00;
    end
 
    logic [7:0] ch_red_pipe [10:0];
@@ -332,7 +332,7 @@ module top_level (
 
    logic [1:0] set_bpm;
    logic [1:0] set_bpm_buf;
-   assign set_bpm = sw[3:2];
+   assign set_bpm = sw[6:5];
    // sw == 00: don't set bpm
    // sw == 01: set bpm with baton
    // sw == 10: set bpm with switches 15-8
@@ -345,8 +345,18 @@ module top_level (
    logic [7:0] manual_bpm;
    assign manual_bpm =  sw[15:8];
 
+   // testing
+   logic [3:0] total_beats_detected;
+   always_ff @(posedge clk_camera) begin 
+      if (sys_rst_camera) begin
+         total_beats_detected <= 0;
+      end else begin 
+         total_beats_detected <= total_beats_detected + beat_detected;
+      end
+   end
+
    baton_tracker my_bt
-   ( .y_com_in(y_com),
+   ( .y_in(y_com),
    .measure_in(set_bpm == 2'b01),
    .rst_in(sys_rst_camera),
    .clk_camera_in(clk_camera),
@@ -358,9 +368,9 @@ module top_level (
    .bpm_in(manual_bpm),
    .rst_in(sys_rst_camera),
    .clk_camera_in(clk_camera),
-   .valid_override_in(set_bpm_buf == 2'b10),
-   .measure_in(set_bpm_buf == 2'b01),
-   .bpm_out(bpm)
+   .set_bpm_in(set_bpm_buf),
+   .bpm_out(bpm),
+   .led_out(led[14:0])
    );
 
 // UART Transmit_________________________________________________________________________________
@@ -370,47 +380,74 @@ module top_level (
    logic [15:0] full_message;
    logic new_message;
    logic uart_busy;
-   logic [3:0] uart_counter;
+   logic [15:0] uart_count;
+   logic beat_existed;
+   logic data_ready;
 
-   //sampling one of every two data points... may need to be changed
+   // assign uart_count = (camera_vcount_pipe[4])*320 + (camera_hcount_pipe[4]);
+
+   counter uart_counter (
+      .clk_in(clk_camera),
+      .rst_in(sys_rst_camera),
+      .period_in(57600),
+      .count_out(uart_count)
+   );
+
    always_ff @(posedge clk_camera) begin
-      if (sys_rst_camera) begin
-         new_message <= 1;
-         raw_message <= {y_com, 4'b0, beat_detected}; // updates every cycle
-         uart_counter <= 0;
+      if (uart_count == 14400 && data_ready == 0) begin
+         to_transmit <= y_com[7:0];
+         data_ready <= 1;
+      end else if (uart_count == 43200 && data_ready == 0) begin
+         to_transmit <= {beat_existed, 7'b0};
+         beat_existed <= beat_detected;
+         data_ready <= 1;
       end else begin
-         if (uart_counter == 0) begin
-            to_transmit <= full_message[15:8];
-            full_message <= (new_message)? {y_com, 4'b0, beat_detected}: full_message << 8;
-            new_message <= !new_message;
-         end
-         uart_counter <= (uart_counter == 9)? 0 : uart_counter + 1;
+         beat_existed <= beat_existed | beat_detected;
+         data_ready <= 0;
       end
    end
 
+   //sampling one of every two data points... may need to be changed
+   // always_ff @(posedge clk_camera) begin
+   //    if (sys_rst_camera) begin
+   //       new_message <= 1;
+   //       raw_message <= {y_com, 4'b0, beat_detected}; // updates every cycle
+   //       uart_counter <= 0;
+   //    end else begin
+   //       if (uart_counter == 0) begin
+   //          to_transmit <= full_message[15:8];
+   //          full_message <= (new_message)? {y_com, 4'b0, beat_detected}: full_message << 8;
+   //          new_message <= !new_message;
+   //       end
+   //       uart_counter <= (uart_counter == 9)? 0 : uart_counter + 1;
+   //    end
+   // end
+
    uart_transmit #( // parameters copied from lab 3, potentially need to be changed
-      .INPUT_CLOCK_FREQ(100000000),
-      .BAUD_RATE(115200)
+      .INPUT_CLOCK_FREQ(200000000),
+      .BAUD_RATE(230400)
    ) my_uart (
       .clk_in(clk_camera),
       .rst_in(sys_rst_camera),
       .data_byte_in(to_transmit),
-      .trigger_in(uart_counter == 0),
+      .trigger_in(data_ready),
       .busy_out(uart_busy),
       .tx_wire_out(uart_txd)
       );
 
 // MIDI In/Files_________________________________________________________________________________
-   logic [31:0] measured_val; // for easy display on an ssd
+   logic [20:0] measured_val; // for easy display on an ssd
    logic [7:0] velocity_out,received_note_out;
    logic [3:0] channel_out;
-   logic midi_msg_type,midi_data_ready,midi_burst_ready;
-   logic [31:0] burst_on [4:0];
-   logic [31:0] burst_off [4:0];
-   logic [31:0] ss_var [4:0];
+   logic midi_msg_type,midi_data_ready;
+   logic [20:0] burst_on [4:0];
+   logic [20:0] burst_off [4:0];
+   logic [20:0] ss_var [4:0];
    logic burst_ready;
    logic [23:0] debug;
    logic [10:0] count;
+   logic [2:0] on_count,off_count;
+   logic only_off;
 
    midi_decode midi_decoder(
       .midi_Data_in(midi_data_in),
@@ -436,38 +473,13 @@ module top_level (
       .clk_in(clk_camera),
       .burst_notes_on_out(burst_on),
       .burst_notes_off_out(burst_off),
-      .burst_ready_out(burst_ready)
+      .burst_ready_out(burst_ready),
+      .on_msg_count_out(on_count),
+      .off_msg_count_out(off_count),
+      .only_off_msgs_out(only_off)
    );
 //seven segment for debugging
 // logic [6:0] ss_c;
-always_ff @(posedge clk_camera)begin
-   if(burst_ready)begin
-      ss_var <= burst_on;
-      count <= count + 1;
-   end
-
-end
-// seven_segment_controller debug_ssc(
-//   .clk_in(clk_camera),
-//   .rst_in(sys_rst_camera),
-//   .val_in({ss_var[3][15:8],ss_var[2][15:8],ss_var[1][15:8],ss_var[0][15:8]}),
-//   //.val_in(count),
-//   .cat_out(ss_c),
-//   .an_out({ss0_an, ss1_an})
-// );
-// assign ss0_c = ss_c;
-// assign ss1_c = ss_c;
-// seven segment for debugging
-// logic [6:0] ss_c;
-// seven_segment_controller debug_ssc(
-//   .clk_in(clk_camera),
-//   .rst_in(rst_midi),
-//   .val_in(val),
-//   .cat_out(ss_c),
-//   .an_out({ss0_an, ss1_an})
-// );
-// assign ss0_c = ss_c;
-// assign ss1_c = ss_c;
 
 // PWM Output_________________________________________________________________________________
 // Assuming we will get at most five notes together from the module after midi_decode
@@ -494,11 +506,63 @@ end
    // sample it based off note_octave, put into sound_wave
 
    logic spk_out;
+   logic change_pwm;
+   logic valid_sig_data,pwm_ready;
+   logic [7:0] pwm_in;
+   logic [11:0] val;
+   logic [7:0] wait_val;
+   logic [3:0] octave_count [4:0];
+   logic [7:0] note_value_array [4:0];
+   logic [7:0] note_velocity_array [4:0];
+
+   pwm_combine synth(
+      .clk_in(clk_camera),
+      .rst_in(sys_rst_camera),
+      .midi_burst_ready_in(burst_ready),
+      .on_msg_count_in(on_count),
+      .midi_burst_data_in(burst_on),
+      .vals_ready(valid_sig_data),
+      .octave_count(octave_count),
+      .note_value_array(note_value_array),
+      .only_off_msgs(only_off),
+      .note_velocity_array(note_velocity_array)
+   );
+
+   sine_machine sine(
+      .clk_in(clk_camera),
+      .rst_in(sys_rst_camera),
+      .note_number_in(note_value_array[0]),
+      .valid_data_in(valid_sig_data),
+      .only_off_msgs(only_off),
+      .octave_in(octave_count[0]),
+      .sig_out(sound_wave),
+      .sig_ready(pwm_ready)
+   );
+
+   always_ff @(posedge clk_camera)begin
+      if(pwm_ready)begin
+         pwm_in <= sound_wave;
+      end
+      if(valid_sig_data)begin
+         val <= {note_value_array[0],octave_count[0]};
+      end
+   end
+   
+   logic [6:0] ss_c;
+seven_segment_controller debug_ssc(
+  .clk_in(clk_camera),
+  .rst_in(sys_rst_camera),
+  .val_in(val),
+  .cat_out(ss_c),
+  .an_out({ss0_an, ss1_an})
+);
+assign ss0_c = ss_c;
+assign ss1_c = ss_c;
 
    pwm audio_out
    (.clk_in(clk_camera),
    .rst_in(sys_rst_camera),
-   .dc_in(sound_wave),
+   .dc_in(pwm_in),
    .sig_out(spk_out)
    );
 
@@ -669,7 +733,7 @@ end
    (.clk_in(clk_camera),
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({frame_buff_valid, 8'b0}),
+   .val_in({bpm, 20'b0, total_beats_detected}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );
@@ -828,10 +892,10 @@ end
       .bram_addr(registers_addr));
 
    // a handful of debug signals for writing to registers
-   assign led[0] = crw.bus_active;
-   assign led[1] = cr_init_valid;
-   assign led[2] = cr_init_ready;
-   assign led[15:3] = 0;
+   // assign led[0] = crw.bus_active;
+   // assign led[1] = cr_init_valid;
+   // assign led[2] = cr_init_ready;
+   // assign led[15:3] = 0;
 
 endmodule // top_level
 

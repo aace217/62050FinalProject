@@ -2,46 +2,50 @@
 `default_nettype none
 
 module baton_tracker(
-    input wire [10:0] y_com_in,
+    input wire [9:0] y_in,
     input wire measure_in,
     input wire rst_in,
     input wire clk_camera_in,
     output logic change_out
 );
-logic signed [10:0] old_derivative;
+logic signed [9:0] prev_y_diff;
 logic [18:0] delta_t; // counter for making sure that data is valid
-logic signed [10:0] y_diff;
-logic signed [10:0] old_y;
+logic signed [9:0] y_diff;
+logic signed [9:0] prev_y_in;
 
-logic [18:0] threshold; // threshold for making sure that data is valid
+logic signed [18:0] threshold; // threshold for making sure that data is valid
 // assign threshold = ;
 
-
-assign y_diff = $signed(y_com_in) - $signed(old_y); 
+assign threshold = -1;
+assign y_diff = $signed(y_in) - $signed(prev_y_in); 
 
 always_ff @(posedge clk_camera_in) begin
     if (rst_in) begin
         // reset all the variables
         change_out <= 0;
-        old_derivative <= 0;
-        old_y <= 0;
+        prev_y_diff <= 0;
+        prev_y_in <= 0;
         delta_t <= 0;
+        // stage <= 0;
     end else if (measure_in) begin
-        // implementation of the derivative algorithm
-        old_y <= y_com_in;
-        old_derivative <= y_diff;
-        // if the old derivative 
-        // wait something like 10k clock cycles to allow the noise to average itself out
-        if (delta_t > threshold) begin
-            if (old_derivative[10] ^ y_diff[10]) begin // if signs are different, change_out is high
-                change_out <= 1; 
-                delta_t <= 0;
+        if ($signed(delta_t) > $signed(threshold)) begin
+            if ($signed(y_diff) >= -2 && $signed(y_diff) <= 2) begin
+                change_out <= 0;
+                // stage <= 4'b0111;
+                // prev_y_diff <= y_diff;
+            end else if (($signed(y_diff) < -2 && $signed(prev_y_diff) > 2)) begin //  || ($signed(y_diff) > 5 && $signed(prev_y_diff) < 5)
+                change_out <= 1;
+                prev_y_in <= y_in;
+                prev_y_diff <= y_diff;  
+                // stage <= 4'b1111;
             end else begin
                 change_out <= 0;
-                delta_t <= delta_t + 1;
+                prev_y_in <= y_in;
+                prev_y_diff <= y_diff;  
+                // stage <= 4'b1010;
             end
         end
-
+        delta_t <= (($signed(y_diff) < -2 && $signed(prev_y_diff) > 2))? 0: delta_t + 1; // if change in sign, reset
     end
 end
 endmodule
