@@ -24,27 +24,7 @@ batonPoints = []
 for i in range(20000):
     y_com = int.from_bytes(ser.read(), 'little')
     beat_detected = int.from_bytes(ser.read(), 'little')
-    # print(y_com, beat_detected)
-
-    
-    
-    # to_add = [0,0]
-    # for j in range(2):
-    # received_byte = int.from_bytes(ser.read(), 'little')
-        # to_add[j] = received_byte
-        # beat_detected = int.from_bytes(ser.read(), 'little')
-    
-    # beat_detected = (0b10000000 & int.from_bytes(received_byte,'little')) >> 7
-    # if beat_detected != 0:
-    #     print(beat_detected)
-    # y_com = (0b01111111 & int.from_bytes(received_byte,'little')) << 1
-    # if ((i+1)%8000==0):
-    #     print(f"{(i+1)/8000} seconds complete")
-    # if i % 4 == 2 or i % 3 == 3:
-    #     beatPoints.append(received_byte)
-    # elif i % 4 == 0 or i % 4 == 1:
-    #     yPoints.append(received_byte)
-    batonPoints.append([y_com, beat_detected])
+    batonPoints.append([(y_com), (beat_detected)])
 
 
 print(batonPoints)

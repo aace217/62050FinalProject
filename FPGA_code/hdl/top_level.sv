@@ -396,6 +396,7 @@ module top_level (
    always_ff @(posedge clk_camera) begin
       if (uart_count == 14400 && data_ready == 0) begin
          to_transmit <= y_com[7:0];
+         beat_existed <= beat_existed | beat_detected;
          data_ready <= 1;
       end else if (uart_count == 43200 && data_ready == 0) begin
          to_transmit <= {beat_existed, 7'b0};
