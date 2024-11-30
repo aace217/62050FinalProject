@@ -573,6 +573,20 @@ assign ss1_c = ss_c;
 
 // Staff Creation & Image Sprite_________________________________________________________________________________
 
+   logic [4:0][7:0] notes;
+   logic [4:0][29:0] durations;
+
+   // 1 cycle
+   note_duration get_notes (
+      .received_note(),
+      .valid_note_in(),
+      .note_on_in(),
+      .clk_camera_in(clk_camera),
+      .rst_in(sys_rst_camera),
+      .notes_out(notes),
+      .durations_out(durations)
+   );
+
    logic [1:0] staff_pixel, staff_pixel_buf;
    logic staff_val, staff_val_buf;
 
@@ -580,7 +594,8 @@ assign ss1_c = ss_c;
    ( .hcount(camera_hcount_pipe[7]),
    .vcount(camera_vcount_pipe[7]),
    .bpm(bpm),
-   .received_note(received_note_out),
+   .notes_in(notes),
+   .durations_in(durations),
    .clk_camera_in(clk_camera),
    .rst_in(sys_rst_camera),
    .staff_out(staff_pixel),

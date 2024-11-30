@@ -28,24 +28,29 @@ async def reset(rst,clk):
     await ClockCycles(clk,1)
     
 @cocotb.test()
-async def test_staff(dut):
+async def test_durations(dut):
     cocotb.start_soon(Clock(dut.clk_camera_in, 10, units="ns").start())
     # use helper function to assert reset signal
     await reset(dut.rst_in, dut.clk_camera_in)
-    dut.hcount.value = 0
-    dut.vcount.value = 0 
-    dut.bpm.value = 60
-    dut.received_note.value = 0x01000100_01000200_01000300_01000400_01000500
-    dut.num_lines.value = 1
+    dut.valid_note_in.value = 1
+    dut.note_on_in.value = 0b11111
+    dut.received_note.value = 0x0100_0200_0300_0400_0500
     
     await ClockCycles(dut.clk_camera_in,3)
-    dut.received_note.value = 0x01000a00_01000200_01000300_01000400_01000500
+    dut.note_on_in.value = 0b11111
+    dut.received_note.value = 0x0a00_0200_0300_0400_0500
     await ClockCycles(dut.clk_camera_in,3)
-    dut.received_note.value = 0x01000a00_01000b00_01000c00_01000400_01000500
+    dut.note_on_in.value = 0b11111
+    dut.received_note.value = 0x0a00_0b00_0c00_0400_0500
     await ClockCycles(dut.clk_camera_in,3)
-    dut.received_note.value = 0x01000c00_01000d00_01000500_01000a00_01000b00
+    dut.note_on_in.value = 0b11111
+    dut.received_note.value = 0x0c00_0d00_0500_0a00_0b00
     await ClockCycles(dut.clk_camera_in,3)    # await drive_note(dut,90,100,2)
-    dut.received_note.value = 0x01000500_01000a00_01000c00_01000d00_01000600
+    dut.note_on_in.value = 0b11111
+    dut.received_note.value = 0x0500_0a00_0c00_0d00_0600
+    await ClockCycles(dut.clk_camera_in,3)    # await drive_note(dut,90,100,2)    # await ClockCycles(dut.clk_in,10000)
+    dut.note_on_in.value = 0b01111
+    dut.received_note.value = 0x0500_0a00_0c00_0d00_0600
     await ClockCycles(dut.clk_camera_in,3)    # await drive_note(dut,90,100,2)    # await ClockCycles(dut.clk_in,10000)
     # await end_note(dut,90,2)
     # await ClockCycles(dut.clk_in,10000)
@@ -56,13 +61,13 @@ async def test_staff(dut):
     
 
     
-def test_staff_creation_runner():
+def test_note_duration_runner():
     """Run the TMDS runner. Boilerplate code"""
     hdl_toplevel_lang = os.getenv("HDL_TOPLEVEL_LANG", "verilog")
     sim = os.getenv("SIM", "icarus")
     proj_path = Path(__file__).resolve().parent.parent
     sys.path.append(str(proj_path / "sim" / "model"))
-    sources = [proj_path / "hdl" / "staff_creation.sv"]
+    sources = [proj_path / "hdl" / "note_duration.sv"]
     print(sources)
     build_test_args = ["-Wall"]
     parameters = {}
@@ -70,7 +75,7 @@ def test_staff_creation_runner():
     runner = get_runner(sim)
     runner.build(
         sources=sources,
-        hdl_toplevel="staff_creation",
+        hdl_toplevel="note_duration",
         always=True,
         build_args=build_test_args,
         parameters=parameters,
@@ -79,11 +84,11 @@ def test_staff_creation_runner():
     )
     run_test_args = []
     runner.test(
-        hdl_toplevel="staff_creation",
-        test_module="test_staff_creation",
+        hdl_toplevel="note_duration",
+        test_module="test_note_duration",
         test_args=run_test_args,
         # waves=True
     )
 
 if __name__ == "__main__":
-    test_staff_creation_runner()
+    test_note_duration_runner()
