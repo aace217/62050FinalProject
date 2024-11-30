@@ -3,7 +3,7 @@
 
 module pipeline #(
         parameter PIPE_SIZE = 10,
-        parameter STAGES_NEEDED
+        parameter STAGES_NEEDED = 1
     )(
         input wire clk_in,
         input wire [PIPE_SIZE-1:0] wire_in,
