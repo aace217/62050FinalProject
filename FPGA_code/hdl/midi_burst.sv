@@ -10,9 +10,10 @@ module midi_burst#(
     input wire midi_status_in,
     input wire rst_in,
     input wire clk_in,
-    output logic [31:0] burst_notes_on_out [4:0],
-    output logic [31:0] burst_notes_off_out [4:0],
+    output logic [20:0] burst_notes_on_out [4:0],
+    output logic [20:0] burst_notes_off_out [4:0],
     output logic burst_ready_out,
+    output logic only_off_msgs_out,
     output logic [2:0] on_msg_count_out,
     output logic [2:0] off_msg_count_out
 );
@@ -21,14 +22,15 @@ module midi_burst#(
     // from the output of the midi device
     logic [$clog2(BURST_DURATION)-1:0] cycle_count;
     logic [2:0] local_on_msg_count,local_off_msg_count;
-    logic [31:0] midi_on_buffer [4:0];
-    logic [31:0] midi_off_buffer [4:0];
-    logic [31:0] midi_data;
+    logic [20:0] midi_on_buffer [4:0];
+    logic [20:0] midi_off_buffer [4:0];
+    logic [20:0] midi_data;
     enum logic [1:0]  {IDLE,COLLECTING,TRANSMITTING} burst_state;
-    assign midi_data = {{7'b0,midi_status_in},{4'b0,midi_channel_in},midi_received_note_in,midi_velocity_in};
+    assign midi_data = {midi_status_in,midi_channel_in,midi_received_note_in,midi_velocity_in};
     always_ff @(posedge clk_in)begin
         if(rst_in)begin
             // reset everything
+            only_off_msgs_out <= 1;
             burst_ready_out <= 0;
             on_msg_count_out <= 0;
             off_msg_count_out <= 0;
@@ -56,6 +58,7 @@ module midi_burst#(
                         midi_off_buffer[0] <= midi_data;
                     end
                 end else begin
+                    only_off_msgs_out <= 1;
                     burst_ready_out <= 0;
                     cycle_count <= 0;
                     on_msg_count_out <= 0;
@@ -73,6 +76,7 @@ module midi_burst#(
                     if(midi_status_in)begin
                         midi_on_buffer[local_on_msg_count] <= midi_data;
                         local_on_msg_count <= local_on_msg_count + 1;
+                        only_off_msgs_out <= 0;
                     end else begin
                         midi_off_buffer[local_off_msg_count] <= midi_data;
                         local_off_msg_count <= local_off_msg_count + 1;
