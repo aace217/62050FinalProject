@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.io import wavfile
+import wave
 
 # Define the sample rate (frame rate) and fundamental notes
 sampleRate = 8000  # Set frame rate to 8000 Hz
@@ -14,10 +14,16 @@ def float2pcm_8bit(sig):
     sig = np.asarray(sig)  # Ensure signal is a NumPy array
     return ((sig + 1.0) * 127.5).clip(0, 255).astype(np.uint8)  # Map to [0, 255]
 
-# Generate WAV files for each note
-for note in fundamental_notes.keys():
-    t = np.linspace(0, 5, sampleRate * 5, endpoint=False)  # Adjust time array for 8000 Hz
-    y = np.sin(2 * np.pi * note * t)  # Generate sine wave
+# Generate 1-second WAV files for each note
+for freq, note in fundamental_notes.items():
+    t = np.linspace(0, 1, sampleRate, endpoint=False)  # Time array for 1 second
+    y = np.sin(2 * np.pi * freq * t)  # Generate sine wave
     y = float2pcm_8bit(y)  # Convert to 8-bit PCM
-    wavfile.write(f'{fundamental_notes[note]}.wav', sampleRate, y)  # Save WAV file
-    print(f"Just made the file: {fundamental_notes[note]}.wav")
+    
+    # Write the WAV file using the wave module
+    with wave.open(f'{note}.wav', 'wb') as wav_file:
+        wav_file.setnchannels(1)  # Mono
+        wav_file.setsampwidth(1)  # Sample width = 1 byte (8-bit)
+        wav_file.setframerate(sampleRate)  # Set frame rate
+        wav_file.writeframes(y.tobytes())  # Write PCM data
+    print(f"Just made the file: {note}.wav")
