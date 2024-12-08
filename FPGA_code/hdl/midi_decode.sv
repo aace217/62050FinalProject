@@ -14,7 +14,7 @@ module midi_decode(
     logic midi_byte_ready;
     logic [7:0] uart_out;
     logic [14:0] cc;
-    localparam TIMEOUT_PERIOD = 20*100_000_000/31_250; // if one MIDI packet passes and nothing
+    localparam TIMEOUT_PERIOD = 40*100_000_000/31_250; // if one MIDI packet passes and nothing
                                                        // comes from UART, then something is wrong
     enum logic [1:0]  {IDLE,FIRST_BYTE,SECOND_BYTE, TRANSMITTING} midi_state;
     
@@ -83,8 +83,9 @@ module midi_decode(
                     // the transmitting state will not be arrived at with bad data
                     // due to previous checks
                     
-                    //TODO: see if you can prvent sending empty data
-                    if(msg[15:8] != 8'b0 && msg[23:16] != 8'b0)begin
+                    // sending empty data with no note is not allowed
+                    // velocity can be empty however (when notes are turned off)
+                    if(msg[15:8] != 8'b0)begin
                         channel_out <= msg[3:0]; // those bits indicate the channel #
                         received_note_out <= msg[15:8]; 
                         velocity_out <= msg[23:16];
