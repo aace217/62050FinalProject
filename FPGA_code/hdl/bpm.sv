@@ -21,7 +21,7 @@ module bpm(
     localparam IDLE = 0;
     localparam BATON = 1;
     localparam OVERRIDE = 2;
-    localparam IDLE_COPY = 3;
+    localparam DEFAULT = 3;
 
     always_ff @(posedge clk_camera_in)begin
         if(rst_in)begin
@@ -43,14 +43,14 @@ module bpm(
                 end
                 OVERRIDE: begin // MANUAL OVERRIDE
                     state <= set_bpm_in;
-                    bpm_out <= bpm_in;
+                    bpm_out <= (bpm_in < 40)? 40 : (bpm_in > 300)? 300: bpm_in;
                     cycle_counter <= 0;
                     led_out <= 0;
                 end
                 BATON: begin 
                     if(cycle_counter == 3_000_000_000) begin // 200e6 cycles / 1 sec * 15 sec = 3000e6 cycles
                     // done condition
-                        bpm_out <= hit_counter<<2; // must multiply by 4 to get bpm for 60 sec
+                        bpm_out <= (hit_counter<<2 < 40)? 40 : (hit_counter <<2 > 300)? 300 : hit_counter << 2; // must multiply by 4 to get bpm for 60 sec
                         hit_counter <= 0;
                         cycle_counter <= 0;
                         led_out <= 15'b111_1111_1111_1111;
@@ -79,6 +79,12 @@ module bpm(
                         cycle_counter <= cycle_counter + 1;
                         hit_counter <= (change_in)? hit_counter + 1 : hit_counter;
                     end
+                end
+                DEFAULT: begin
+                    state <= set_bpm_in;
+                    bpm_out <= 8'd240;
+                    cycle_counter <= 0;
+                    led_out <= 0;
                 end
             endcase
         end

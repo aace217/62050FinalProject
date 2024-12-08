@@ -89,8 +89,8 @@ module top_level (
       cam_vsync_buf <= {cam_vsync, cam_vsync_buf[1]};
    end
 
-   logic [10:0] camera_hcount;
-   logic [9:0]  camera_vcount;
+   logic [8:0] camera_hcount;
+   logic [7:0]  camera_vcount;
    logic [15:0] camera_pixel;
    logic        camera_valid;
 
@@ -112,14 +112,14 @@ module top_level (
       val_cam_pixel <= (camera_valid)? camera_pixel: val_cam_pixel;
    end
 
-   logic [10:0] camera_hcount_pipe [11:0];
-   logic [9:0]  camera_vcount_pipe [11:0];
-   logic [15:0] val_cam_pixel_pipe [11:0];
-   logic        camera_valid_pipe [12:0];
+   logic [8:0] camera_hcount_pipe [15:0];
+   logic [7:0]  camera_vcount_pipe [15:0];
+   logic [15:0] val_cam_pixel_pipe [15:0];
+   logic        camera_valid_pipe [16:0];
    
    pipeline #(
    .PIPE_SIZE(1),
-   .STAGES_NEEDED(13)
+   .STAGES_NEEDED(17)
    ) camera_valid_piper (
    .clk_in(clk_camera),
    .wire_in(camera_valid),
@@ -128,7 +128,7 @@ module top_level (
 
    pipeline #(
    .PIPE_SIZE(16),
-   .STAGES_NEEDED(12)
+   .STAGES_NEEDED(16)
    ) val_cam_pixel_piper (
    .clk_in(clk_camera),
    .wire_in(val_cam_pixel),
@@ -136,8 +136,8 @@ module top_level (
    );
 
    pipeline #(
-   .PIPE_SIZE(11),
-   .STAGES_NEEDED(12)  // 12 for now since staff creation is unknown, but will have at least 4 cycles
+   .PIPE_SIZE(9),
+   .STAGES_NEEDED(16)  // 12 for now since staff creation is unknown, but will have at least 4 cycles
    ) camera_hcount_piper (
    .clk_in(clk_camera),
    .wire_in(camera_hcount),
@@ -145,8 +145,8 @@ module top_level (
    );
 
    pipeline #(
-   .PIPE_SIZE(10),
-   .STAGES_NEEDED(12) // 12 for now since staff creation is unknown, but will have at least 4 cycles
+   .PIPE_SIZE(8),
+   .STAGES_NEEDED(16) // 12 for now since staff creation is unknown, but will have at least 4 cycles
    ) camera_vcount_piper (
    .clk_in(clk_camera),
    .wire_in(camera_vcount),
@@ -259,8 +259,8 @@ module top_level (
 
 // Center of mass_________________________________________________________________________________
 
-   logic [10:0] x_com, x_com_calc; //long term x_com and output from module, resp
-   logic [9:0] y_com, y_com_calc; //long term y_com and output from module, resp
+   logic [9:0] x_com, x_com_calc; //long term x_com and output from module, resp
+   logic [8:0] y_com, y_com_calc; //long term y_com and output from module, resp
    logic new_com; //used to know when to update x_com and y_com ...
  
 
@@ -291,9 +291,9 @@ module top_level (
    // Crosshairs
    logic [7:0] ch_red, ch_green, ch_blue;
    always_comb begin
-      ch_red   = ((camera_vcount_pipe[4]==y_com) || (camera_hcount_pipe[4]==x_com))?8'hFF:8'h00;
-      ch_green = ((camera_vcount_pipe[4]==y_com) || (camera_hcount_pipe[4]==x_com))?8'hFF:8'h00;
-      ch_blue  = ((camera_vcount_pipe[4]==y_com) || (camera_hcount_pipe[4]==x_com))?8'hFF:8'h00;
+      ch_red   = ((camera_vcount_pipe[5]==y_com) || (camera_hcount_pipe[5]==x_com))?8'hFF:8'h00;
+      ch_green = ((camera_vcount_pipe[5]==y_com) || (camera_hcount_pipe[5]==x_com))?8'hFF:8'h00;
+      ch_blue  = ((camera_vcount_pipe[5]==y_com) || (camera_hcount_pipe[5]==x_com))?8'hFF:8'h00;
    end
 
    logic [7:0] ch_red_pipe [10:0];
@@ -341,13 +341,15 @@ module top_level (
    end
 
    logic beat_detected;
-   logic [7:0] bpm;
+   logic [7:0] bpm, bpm_buf;
    logic [7:0] manual_bpm;
    assign manual_bpm =  sw[15:8];
+
 
    // testing
    logic [3:0] total_beats_detected;
    always_ff @(posedge clk_camera) begin 
+      bpm_buf <= bpm;
       if (sys_rst_camera) begin
          total_beats_detected <= 0;
       end else begin 
@@ -549,16 +551,16 @@ module top_level (
       end
    end
    
-   logic [6:0] ss_c;
-seven_segment_controller debug_ssc(
-  .clk_in(clk_camera),
-  .rst_in(sys_rst_camera),
-  .val_in(val),
-  .cat_out(ss_c),
-  .an_out({ss0_an, ss1_an})
-);
-assign ss0_c = ss_c;
-assign ss1_c = ss_c;
+//    logic [6:0] ss_c;
+// seven_segment_controller debug_ssc(
+//   .clk_in(clk_camera),
+//   .rst_in(sys_rst_camera),
+//   .val_in(val),
+//   .cat_out(ss_c),
+//   .an_out({ss0_an, ss1_an})
+// );
+// assign ss0_c = ss_c;
+// assign ss1_c = ss_c;
 
    pwm audio_out
    (.clk_in(clk_camera),
@@ -573,39 +575,135 @@ assign ss1_c = ss_c;
 
 // Staff Creation & Image Sprite_________________________________________________________________________________
 
-   logic [4:0][7:0] notes;
-   logic [4:0][29:0] durations;
+   logic [7:0] notes [4:0];
+   logic [29:0] durations [4:0];
+   logic [11:0] note_memory [4:0][63:0];
 
+   // testing with fake midi signals
+   logic [3:0] octave_test [4:0];
+   logic [3:0] note_test [4:0];
+   logic [4:0] note_on_test;
+
+   assign note_on_test[0] = (btn[1])? 1 : 0;
+   assign note_on_test[1] = 0;
+   assign note_on_test[2] = (btn[2])? 1 : 0;
+   assign note_on_test[3] = (btn[3])? 1 : 0;
+   assign note_on_test[4] = 0;
+
+   assign octave_test[0] = (btn[1])? 5 : 0;
+   assign octave_test[1] = 0;
+   assign octave_test[2] = (btn[2])? 4 : 0;
+   assign octave_test[3] = (btn[3])? 4 : 0;
+   assign octave_test[4] = 0;
+ 
+   assign note_test[0] = (btn[1])? 2 : 0;
+   assign note_test[1] = 0;
+   assign note_test[2] = (btn[2])? 9 : 0;
+   assign note_test[3] = (btn[3])? 6 : 0;
+   assign note_test[4] = 0;
    // 1 cycle
-   note_duration get_notes (
-      .received_note(),
-      .valid_note_in(),
-      .note_on_in(),
-      .clk_camera_in(clk_camera),
+   note_duration_run_it_back get_notes (
+      .octave_count(octave_test),
+      .note_value_array(note_test),
+      .bpm(bpm_buf),
+      .valid_note_in(1),
+      .note_on_in(note_on_test),
+      .clk_in(clk_100_passthrough),
       .rst_in(sys_rst_camera),
       .notes_out(notes),
       .durations_out(durations)
    );
+   
+   logic [15:0] addra_note;
+   logic [15:0] note_mem;
+   logic [31:0] met_test;
+   logic [5:0] staff_cell;
+   logic storing_state, storing_state_check;
 
-   logic [1:0] staff_pixel, staff_pixel_buf;
-   logic staff_val, staff_val_buf;
+   logic [3:0] note_rhythms [4:0];
 
-   staff_creation my_staff 
-   ( .hcount(camera_hcount_pipe[7]),
-   .vcount(camera_vcount_pipe[7]),
-   .bpm(bpm),
-   .notes_in(notes),
-   .durations_in(durations),
-   .clk_camera_in(clk_camera),
-   .rst_in(sys_rst_camera),
-   .staff_out(staff_pixel),
-   .staff_valid(staff_val)
+   
+   note_storing_run_it_back eom (
+      .clk_in(clk_100_passthrough),
+      .rst_in(sys_rst_camera),
+      .bpm(bpm_buf),
+      .num_lines(1),
+      .notes_in(notes),
+      .durations_in(durations),
+      .addr_out(addra_note),
+      .mem_out(note_mem),
+      .note_memory(note_memory),
+      .sixteenth_metronome(met_test),
+      .current_staff_cell(staff_cell),
+      .storing_state_out(storing_state),
+      .note_rhythms(note_rhythms)
    );
 
-   always_ff @(posedge clk_camera)begin
-      staff_pixel_buf <= staff_pixel;
-      staff_val_buf <= staff_val;
+   logic [15:0] addrb_bram;
+   always_ff @(posedge clk_camera) begin
+      addrb_bram <= camera_vcount_pipe[14]*320+camera_hcount_pipe[14];
    end
+
+   //frame buffer from IP
+   blk_mem_gen_0 frame_buffer_midi (
+      .addra(addra_note), //pixels are stored using this math
+      .clka(clk_100_passthrough),
+      .wea(1),
+      .dina(note_mem),
+      .ena(1'b1),
+      .douta(), //never read from this side
+      .addrb(addrb_bram), //transformed lookup pixel, NEED TO PIPELINE TODO
+      .dinb(16'b0),
+      .clkb(clk_camera),
+      .web(1'b0),
+      .enb(1'b1),
+      .doutb(staff_pixel)
+   );
+
+
+   logic [15:0] staff_pixel, staff_pixel_buf;
+   logic staff_val, staff_val_buf;
+
+   // staff_creation my_staff 
+   // ( .hcount(camera_hcount_pipe[7]),
+   // .vcount(camera_vcount_pipe[7]),
+   // .bpm(bpm),
+   // .notes_in(notes),
+   // .durations_in(durations),
+   // .clk_camera_in(clk_camera),
+   // .rst_in(sys_rst_camera),
+   // .staff_out(staff_pixel),
+   // .staff_valid(staff_val)
+   // );
+
+   always_ff @(posedge clk_camera)begin
+      if (sys_rst_camera) begin
+         storing_state_check <= 0;
+         staff_val <= 1;
+      end else begin
+      // staff_pixel_buf <= staff_pixel;
+         staff_val <= 1;
+         // staff_val_buf <= staff_val;
+         
+         storing_state_check <= storing_state_check + storing_state;
+      end
+
+   end
+   
+   logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
+
+   seven_segment_controller pixel_display_test
+   (.clk_in(clk_100_passthrough),
+   .rst_in(sys_rst_camera),
+   // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
+   .val_in({durations[0][29:18], note_rhythms[0], notes[0], 2'b0, staff_cell}),
+   .cat_out(ss_c),
+   .an_out({ss0_an, ss1_an})
+   );
+
+   assign ss0_c = ss_c; //control upper four digit's cathodes!
+   assign ss1_c = ss_c; //same as above but for lower four digits!
+
 
 
 // Video signal generator_________________________________________________________________________________
@@ -657,13 +755,13 @@ assign ss1_c = ss_c;
    video_mux mvm(
       .clk_in(clk_camera),
       .bg_in(display_choice), //choose background
-      .staff_pixel_in(staff_pixel_buf),
-      .staff_pixel_val(staff_val_buf),
-      .camera_pixel_in(val_cam_pixel_pipe[11]),
-      .camera_pixel_val(camera_valid_pipe[12]),
-      .y_in(y_channel_pipe[8]), // luminance
-      .thresholded_pixel_in(mask_pipe[7]), // one bit mask signal
-      .crosshair_in({ch_red_pipe[6], ch_green_pipe[6], ch_blue_pipe[6]}), 
+      .staff_pixel_in(staff_pixel),
+      .staff_pixel_val(staff_val),
+      .camera_pixel_in(val_cam_pixel_pipe[15]),
+      .camera_pixel_val(camera_valid_pipe[16]),
+      .y_in(y_channel_pipe[12]), // luminance
+      .thresholded_pixel_in(mask_pipe[12]), // one bit mask signal
+      .crosshair_in({ch_red_pipe[10], ch_green_pipe[10], ch_blue_pipe[10]}), 
       .pixel_out(pixel_mem),
       .valid_out(valid_mem)
    );
@@ -684,7 +782,7 @@ assign ss1_c = ss_c;
 
    always_ff @(posedge clk_camera) begin
       // addra logic
-      addra <= {5'b0, (camera_vcount_pipe[11])}*320 + {4'b0,(camera_hcount_pipe[11])};
+      addra <= {5'b0, (camera_vcount_pipe[15])}*320 + {4'b0,(camera_hcount_pipe[15])};
       addra_buf <= addra;
    end
 
@@ -734,28 +832,20 @@ assign ss1_c = ss_c;
    end
 
    always_comb begin
-      red = frame_buff_valid[23:16];
-      green = frame_buff_valid[15:8];
-      blue = frame_buff_valid[7:0];
+      if (display_choice == 0) begin
+         red = frame_buff_valid[7:0];
+         green = frame_buff_valid[7:0];
+         blue = frame_buff_valid[7:0];
+      end else begin
+         red = frame_buff_valid[23:16];
+         green = frame_buff_valid[15:8];
+         blue = frame_buff_valid[7:0];
+      end
    end
    
 // HDMI Video Out_________________________________________________________________________________
 
   
-
-   logic [6:0] ss_c; //used to grab output cathode signal for 7s leds
-
-   seven_segment_controller pixel_display_test
-   (.clk_in(clk_camera),
-   .rst_in(sys_rst_camera),
-   // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({bpm, 20'b0, total_beats_detected}),
-   .cat_out(ss_c),
-   .an_out({ss0_an, ss1_an})
-   );
-
-   assign ss0_c = ss_c; //control upper four digit's cathodes!
-   assign ss1_c = ss_c; //same as above but for lower four digits!
 
 
 

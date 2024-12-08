@@ -4,7 +4,7 @@
 module video_mux(
   input wire clk_in,
   input wire [1:0] bg_in, //regular video
-  input wire [1:0] staff_pixel_in,
+  input wire [15:0] staff_pixel_in,
   input wire staff_pixel_val,
   input wire [15:0] camera_pixel_in,
   input wire camera_pixel_val,
@@ -19,7 +19,7 @@ module video_mux(
     
     case(bg_in)
       0: begin // staff
-        pixel_out <= {16{staff_pixel_in}};
+        pixel_out <= staff_pixel_in;
         valid_out <= staff_pixel_val;
       end
       1: begin // camera

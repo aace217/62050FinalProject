@@ -2,18 +2,24 @@
 `default_nettype none
 
 module note_duration (
-    input wire [4:0][15:0] received_note,
+    input wire [3:0] octave_count[4:0],
+    input wire [3:0] note_value_array[4:0],
     input wire valid_note_in,
     input wire [4:0] note_on_in,
-    input wire clk_camera_in,
+    input wire clk_in,
     input wire rst_in,
-    output logic [4:0][7:0] notes_out,
-    output logic [4:0][29:0] durations_out
+    output logic [7:0] notes_out[4:0],
+    output logic [31:0] durations_out[4:0]
 );
 
 // Prepare yourself for the yapfest...
 // anthony i'm so sorry i cannot not do the tertiary statements skull
-
+logic [4:0][15:0] received_note;
+assign received_note[4] = {note_value_array[4], octave_count[4]};
+assign received_note[3] = {note_value_array[3], octave_count[3]};
+assign received_note[2] = {note_value_array[2], octave_count[2]};
+assign received_note[1] = {note_value_array[1], octave_count[1]};
+assign received_note[0] = {note_value_array[0], octave_count[0]};
 
 logic [7:0] note1, note2, note3, note4, note5;
 logic [29:0] duration1, duration2, duration3, duration4, duration5;
@@ -164,7 +170,7 @@ always_comb begin
     durations_out[0] = duration5;
 end
 
-always_ff @(posedge clk_camera_in) begin
+always_ff @(posedge clk_in) begin
     if (rst_in) begin
         note1 <= 0;
         note2 <= 0;
@@ -188,14 +194,14 @@ always_ff @(posedge clk_camera_in) begin
         note_changedE <= 0;
     end else begin
         // get duration of inputted note in units of cycles
-        // max duration: 300 beats/minute (max bpm?) * minute/60 sec * 1 sec/200e6 cycles = 2.5 * 10^-8 beats/cycles or 40,000,000 = cycles/beat (on the quarter note)
-        // 16 quarter notes possible total (beats) * 40,000,000 cycles/beats = 640,000,000 cycles is max duration, about 30 bits
+        // max duration: 40 beats/minute (min bpm?) * minute/60 sec * 1 sec/200e6 cycles = idk beats/cycles or 300,000,000 = cycles/beat (on the quarter note)
+        // 4 quarter notes possible total (beats) per measure * 300,000,000 cycles/beats = 1,200,000,000 cycles is max duration, about 30 bits
         // if at max, stay at max forever
-        duration1 <= (note_changed1 != 0)? 0 : (duration1 == 39_999_999)? 39_999_999: duration1 + 1;
-        duration2 <= (note_changed2 != 0)? 0 : (duration2 == 39_999_999)? 39_999_999: duration2 + 1;
-        duration3 <= (note_changed3 != 0)? 0 : (duration3 == 39_999_999)? 39_999_999: duration3 + 1;
-        duration4 <= (note_changed4 != 0)? 0 : (duration4 == 39_999_999)? 39_999_999: duration4 + 1;
-        duration5 <= (note_changed5 != 0)? 0 : (duration5 == 39_999_999)? 39_999_999: duration5 + 1;
+        duration1 <= (note_changed1 != 0 || duration1 == 159_999_999)? 0 : duration1 + 1;
+        duration2 <= (note_changed2 != 0 || duration2 == 159_999_999)? 0 : duration2 + 1;
+        duration3 <= (note_changed3 != 0 || duration3 == 159_999_999)? 0 : duration3 + 1;
+        duration4 <= (note_changed4 != 0 || duration4 == 159_999_999)? 0 : duration4 + 1;
+        duration5 <= (note_changed5 != 0 || duration5 == 159_999_999)? 0 : duration5 + 1;
 
         note1 <=    (note_changed1 == 0)? note1: 
                     (note_changed1 == 6)? 0: 

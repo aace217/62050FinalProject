@@ -8,7 +8,7 @@ if __name__ == "__main__":
     else:
         input_fname = sys.argv[1]
         image_in = Image.open(input_fname).convert("L")
-        image_in = image_in.convert('RGB')
+        # image_in = image_in.convert('RGB')
 
 
         w, h = image_in.size
@@ -35,8 +35,9 @@ if __name__ == "__main__":
             for y in range(h):
                 for x in range(w):
                     # f.write(f'{image_out.getpixel((x,y))}\n')
-                    r,g,b = image_out.getpixel((x,y))
-                    f.write(f'{r:02x}{g:02x}{b:02x}\n')
+                    pix = image_out.getpixel((x,y))
+                    print(pix)
+                    f.write(f'{pix:02x}\n')
 
         print('Output image saved at image.mem')
 

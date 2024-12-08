@@ -2,12 +2,12 @@
 module center_of_mass (
                          input wire clk_in,
                          input wire rst_in,
-                         input wire [10:0] x_in,
-                         input wire [9:0]  y_in,
+                         input wire [9:0] x_in,
+                         input wire [8:0]  y_in,
                          input wire valid_in,
                          input wire tabulate_in,
-                         output logic [10:0] x_out,
-                         output logic [9:0] y_out,
+                         output logic [9:0] x_out,
+                         output logic [8:0] y_out,
                          output logic valid_out);
 	 // your code here
 

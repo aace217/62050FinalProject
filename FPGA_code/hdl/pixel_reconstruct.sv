@@ -3,8 +3,8 @@
 
 module pixel_reconstruct
 	#(
-	 parameter HCOUNT_WIDTH = 11,
-	 parameter VCOUNT_WIDTH = 10
+	 parameter HCOUNT_WIDTH = 9,
+	 parameter VCOUNT_WIDTH = 8
 	 )
 	(
 	 input wire 										 clk_in,
