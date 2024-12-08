@@ -452,6 +452,7 @@ module top_level (
    logic [2:0] on_count,off_count;
    logic only_off;
    logic [4:0] note_on_out;
+   logic data_check;
 
    midi_decode midi_decoder(
       .midi_Data_in(midi_data_in),
@@ -532,24 +533,29 @@ module top_level (
       .pwm_data_ready_out(pwm_ready),
       .pwm_data_out(sound_wave)
       
-      ,.state_out(debug_state)
-      ,.msg_count(msg_cnt)
-      ,.mods_done(mods_done)
+      // ,.state_out(debug_state)
+      // ,.msg_count(msg_cnt)
+      // ,.mods_done(mods_done)
    );
 
    always_ff @(posedge clk_100_passthrough)begin
-      if(pwm_ready)begin
+      // if(pwm_ready)begin
+      //    pwm_in <= sound_wave;
+      // end
+      val <= count;
+      if((sound_wave == 0) && (pwm_ready == 0))begin
+         count <= count + 1;
+         pwm_in <= 0;
+      end else begin
          pwm_in <= sound_wave;
       end
-      if(burst_change)begin
-         count <= count + 1;
-      end
-      // pwm_in <= sound_wave;
+   
       // if(burst_change)begin
       //    val  <= note_on_out;
       // end
       if(valid_sig_data)begin
-         val <= {mods_done,1'b0,msg_cnt,note_on_out[4:1],sound_wave,octave_count[4],note_value_array[4],1'b0,debug_state};
+         //val <= {mods_done,1'b0,msg_cnt,note_on_out[4:1],sound_wave,octave_count[4],note_value_array[4],1'b0,debug_state};
+         
       end
    end
    
