@@ -59,33 +59,7 @@ module midi_burst#(
                 burst_refresh_out <= 0;
                 if(midi_data_ready_in)begin
                     burst_state <= COLLECTING;
-                    if(midi_data_ready_in)begin
-                        // need to check the type of message MIDI on or off
-                        if(midi_status_in)begin
-                            // turn a note on
-                            burst_notes_out[zero_index] <= midi_data;
-                            note_on_out[zero_index] <= 1;
-                        end else begin
-                            // turn a note off
-                            for(int i = 0; i < 5; i = i+1)begin
-                                if((burst_notes_out[i][15:8] == midi_data[15:8]))begin
-                                    // finding the note
-                                    burst_notes_out[i] <= 16'b0;
-                                    note_on_out[i] <= 1'b0;
-                                end
-                            end
-                        end
-                    end
-                end else begin
-                    cycle_count <= 0;
-                    local_msg_count <= 0;
-                end
-            end
-            COLLECTING:begin
-                cycle_count <= cycle_count + 1;
-                if(midi_data_ready_in)begin
                     // need to check the type of message MIDI on or off
-                    local_msg_count <= local_msg_count + 1;
                     if(midi_status_in)begin
                         // turn a note on
                         burst_notes_out[zero_index] <= midi_data;
@@ -93,7 +67,7 @@ module midi_burst#(
                     end else begin
                         // turn a note off
                         for(int i = 0; i < 5; i = i+1)begin
-                            if(burst_notes_out[i][15:8] == midi_data[15:8])begin
+                            if((burst_notes_out[i][15:8] == midi_data[15:8]))begin
                                 // finding the note
                                 burst_notes_out[i] <= 16'b0;
                                 note_on_out[i] <= 1'b0;
@@ -101,15 +75,39 @@ module midi_burst#(
                         end
                     end
                 end
-                if(cycle_count == BURST_DURATION || (local_msg_count == 5))begin
-                    burst_state <= TRANSMITTING;
+                 else begin
                     cycle_count <= 0;
+                    local_msg_count <= 0;
+                end
+            end
+            COLLECTING:begin
+                if(midi_data_ready_in)begin
+                    // need to check the type of message MIDI on or off
+                    local_msg_count <= local_msg_count + 1;
+                    if(midi_status_in)begin
+                        // turn a note on
+                        burst_notes_out[zero_index] <= midi_data;
+                        note_on_out[zero_index] <= 1;
+                        burst_refresh_out <= 1;
+                    end else begin
+                        // turn a note off
+                        for(int i = 0; i < 5; i = i+1)begin
+                            if(burst_notes_out[i][15:8] == midi_data[15:8])begin
+                                // finding the note
+                                burst_notes_out[i] <= 16'b0;
+                                note_on_out[i] <= 1'b0;
+                                burst_refresh_out <= 1;
+                            end
+                        end
+                    end
+                end else begin
+                    burst_refresh_out <= 0;
                 end
             end
             TRANSMITTING:begin
                 // transmitting the data that the burst has acquired
-                burst_refresh_out <= 1;
-                cycle_count <= 0;
+                //burst_refresh_out <= 1;
+                //cycle_count <= 0;
                 burst_state <= IDLE;
             end
             default: burst_state <= IDLE;
