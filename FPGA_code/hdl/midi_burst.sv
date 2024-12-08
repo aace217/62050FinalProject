@@ -10,98 +10,107 @@ module midi_burst#(
     input wire midi_status_in,
     input wire rst_in,
     input wire clk_in,
-    output logic [20:0] burst_notes_on_out [4:0],
-    output logic [20:0] burst_notes_off_out [4:0],
-    output logic burst_ready_out,
-    output logic only_off_msgs_out,
-    output logic [2:0] on_msg_count_out,
-    output logic [2:0] off_msg_count_out
+    output logic [15:0] burst_notes_out [4:0],
+    output logic burst_refresh_out,
+    output logic [4:0] note_on_out
 );
 
     // purpose of this module is just to be able to get 5 simultaneous notes 
     // from the output of the midi device
     logic [$clog2(BURST_DURATION)-1:0] cycle_count;
-    logic [2:0] local_on_msg_count,local_off_msg_count;
-    logic [20:0] midi_on_buffer [4:0];
-    logic [20:0] midi_off_buffer [4:0];
-    logic [20:0] midi_data;
+    logic [15:0] midi_data;
+    logic [2:0] zero_index;
+    logic [2:0] local_msg_count;
+
     enum logic [1:0]  {IDLE,COLLECTING,TRANSMITTING} burst_state;
-    assign midi_data = {midi_status_in,midi_channel_in,midi_received_note_in,midi_velocity_in};
+    assign midi_data = {midi_received_note_in,midi_velocity_in};
+
+    always_comb begin
+        if(note_on_out[4] == 1'b0) begin
+            zero_index = 3'b100;
+        end else if(note_on_out[3] == 1'b0) begin
+            zero_index = 3'b011;
+        end else if(note_on_out[2] == 1'b0) begin
+            zero_index = 3'b010;
+        end else if(note_on_out[1] == 1'b0) begin
+            zero_index = 3'b001;
+        end else if(note_on_out[0] == 1'b0)begin
+            zero_index = 3'b000;
+        end else begin
+            // if the buffer is full go the fourth
+            zero_index = 3'b100;
+        end
+    end
+
     always_ff @(posedge clk_in)begin
         if(rst_in)begin
             // reset everything
-            only_off_msgs_out <= 1;
-            burst_ready_out <= 0;
-            on_msg_count_out <= 0;
-            off_msg_count_out <= 0;
-            for(int i = 0; i<5; i = i+1)begin
-                burst_notes_on_out[i] <= 0;
-                burst_notes_off_out[i] <= 0;
-                midi_on_buffer[i] <= 0;
-                midi_off_buffer[i] <= 0;
-            end
+            burst_refresh_out <= 0;
+            local_msg_count <= 0;
             burst_state <= IDLE;
             cycle_count <= 0;
-            local_on_msg_count <= 0;
-            local_off_msg_count <= 0;
+            note_on_out <= 0;
+            for(int i = 0; i<5; i = i+1)begin
+                burst_notes_out[i] <= 0;
+            end
         end else begin
             case(burst_state)
             IDLE:begin
+                burst_refresh_out <= 0;
                 if(midi_data_ready_in)begin
                     burst_state <= COLLECTING;
-                    // setting to one becuase a message is placed
-                    if(midi_status_in)begin
-                        local_on_msg_count <= 1;
-                        midi_on_buffer[0] <= midi_data;
-                    end else begin
-                        local_off_msg_count <= 1;
-                        midi_off_buffer[0] <= midi_data;
+                    if(midi_data_ready_in)begin
+                        // need to check the type of message MIDI on or off
+                        if(midi_status_in)begin
+                            // turn a note on
+                            burst_notes_out[zero_index] <= midi_data;
+                            note_on_out[zero_index] <= 1;
+                        end else begin
+                            // turn a note off
+                            for(int i = 0; i < 5; i = i+1)begin
+                                if((burst_notes_out[i][15:8] == midi_data[15:8]))begin
+                                    // finding the note
+                                    burst_notes_out[i] <= 16'b0;
+                                    note_on_out[i] <= 1'b0;
+                                end
+                            end
+                        end
                     end
                 end else begin
-                    only_off_msgs_out <= 1;
-                    burst_ready_out <= 0;
                     cycle_count <= 0;
-                    on_msg_count_out <= 0;
-                    off_msg_count_out <= 0;
-                    for(int i = 0; i<5; i = i+1)begin
-                        burst_notes_off_out[i] <= 0;
-                        burst_notes_on_out[i] <= 0;
-                    end
+                    local_msg_count <= 0;
                 end
             end
             COLLECTING:begin
                 cycle_count <= cycle_count + 1;
                 if(midi_data_ready_in)begin
                     // need to check the type of message MIDI on or off
+                    local_msg_count <= local_msg_count + 1;
                     if(midi_status_in)begin
-                        midi_on_buffer[local_on_msg_count] <= midi_data;
-                        local_on_msg_count <= local_on_msg_count + 1;
-                        only_off_msgs_out <= 0;
+                        // turn a note on
+                        burst_notes_out[zero_index] <= midi_data;
+                        note_on_out[zero_index] <= 1;
                     end else begin
-                        midi_off_buffer[local_off_msg_count] <= midi_data;
-                        local_off_msg_count <= local_off_msg_count + 1;
+                        // turn a note off
+                        for(int i = 0; i < 5; i = i+1)begin
+                            if(burst_notes_out[i][15:8] == midi_data[15:8])begin
+                                // finding the note
+                                burst_notes_out[i] <= 16'b0;
+                                note_on_out[i] <= 1'b0;
+                            end
+                        end
                     end
                 end
-                if(cycle_count == BURST_DURATION || local_on_msg_count == 5 || local_off_msg_count == 5)begin
+                if(cycle_count == BURST_DURATION || (local_msg_count == 5))begin
                     burst_state <= TRANSMITTING;
                     cycle_count <= 0;
-                    local_on_msg_count <= 0;
-                    local_off_msg_count <= 0;
                 end
             end
             TRANSMITTING:begin
                 // transmitting the data that the burst has acquired
-                burst_notes_off_out <= midi_off_buffer;
-                burst_notes_on_out <= midi_on_buffer;
-                on_msg_count_out <= local_on_msg_count;
-                off_msg_count_out <= local_off_msg_count;
-                burst_ready_out <= 1;
+                burst_refresh_out <= 1;
                 cycle_count <= 0;
                 burst_state <= IDLE;
-                for(int i = 0; i<5; i = i+1)begin
-                    midi_on_buffer[i] <= 0;
-                    midi_off_buffer[i] <= 0;
-                end
             end
             default: burst_state <= IDLE;
             endcase

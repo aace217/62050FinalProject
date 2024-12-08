@@ -25,7 +25,7 @@ async def reset(rst,clk):
     await ClockCycles(clk,2)
 
 
-async def drive_burst(dut,midi_data):
+async def drive_burst(dut,valid_bits,midi_data):
     """ Helper function to send a note to the module
     midi_data_list is a at most five element list with 32 bit elements
     which contain MIDI data in the format of MIDI_burst:
@@ -35,11 +35,11 @@ async def drive_burst(dut,midi_data):
     8 bits: note_number
     8 bits: velocity
     """
-    dut.on_msg_count_in.value = 1
+    dut.on_array_in.value = valid_bits
     dut.midi_burst_data_in.value = midi_data
-    dut.midi_burst_ready_in.value = 1
+    dut.midi_burst_change_in.value = 1
     await ClockCycles(dut.clk_in,1)
-    dut.midi_burst_ready_in.value = 0
+    dut.midi_burst_change_in.value = 0
     await ClockCycles(dut.clk_in,1)
 
     
@@ -55,13 +55,10 @@ async def test_tmds(dut):
     await reset(dut.rst_in,dut.clk_in)
     await ClockCycles(dut.clk_in,5)
     #must be backwards and 21 bits
-    await drive_burst(dut,[0b1_1100_00001111_00100111,0b00000000_00000000_0000_0,0b00000000_00000000_0000_0,0b00000000_00000000_0000_0,0b00000000_00000000_0000_0])
-    print(f"The note should be {0b01100100} with an octave of {0b01100100 % 12}")
-    await ClockCycles(dut.clk_in,200)
-    print(f"vals_ready: {dut.vals_ready.value}")
-    print(f"octave_count: {[dut.octave_count[i].value for i in range(5)]}")
-    print(f"note_value_array: {[dut.note_value_array[i].value for i in range(5)]}")
-    print(f"note_velocity_array: {[dut.note_velocity_array[i].value for i in range(5)]}")
+    #await drive_burst(dut,0b10000,[0b0011_0101_0000_1111,0b0101_0011_0000_1111,0b0000_0000_0000_0000,0b0000_0000_0000_0000,0b0000_0000_0000_0000])
+    #await ClockCycles(dut.clk_in,2000000)
+    await drive_burst(dut,0b11110,[0b0011_0101_0000_1111,0b0101_0011_0000_1111,0b0110_0011_0000_1111,0b0101_0101_0000_0000,0b0000_0000_0000_0000])
+    await ClockCycles(dut.clk_in,2000000)
 
     
     
@@ -73,7 +70,7 @@ def test_tmds_runner():
     sim = os.getenv("SIM", "icarus")
     proj_path = Path(__file__).resolve().parent.parent
     sys.path.append(str(proj_path / "sim" / "model"))
-    sources = [proj_path / "hdl" / "pwm_combine.sv"]
+    sources = [proj_path / "hdl" / "pwm_combine.sv",proj_path / "hdl" / "mod12.sv",proj_path / "hdl" / "sine_machine.sv",proj_path / "hdl" / "xilinx_single_port_ram_read_first.sv"]
     print(sources)
     build_test_args = ["-Wall"]
     parameters = {}

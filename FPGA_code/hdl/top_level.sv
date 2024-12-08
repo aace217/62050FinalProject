@@ -443,19 +443,20 @@ module top_level (
    logic [7:0] velocity_out,received_note_out;
    logic [3:0] channel_out;
    logic midi_msg_type,midi_data_ready;
-   logic [20:0] burst_on [4:0];
+   logic [15:0] burst_on [4:0];
    logic [20:0] burst_off [4:0];
    logic [20:0] ss_var [4:0];
-   logic burst_ready;
+   logic burst_change;
    logic [23:0] debug;
    logic [10:0] count;
    logic [2:0] on_count,off_count;
    logic only_off;
+   logic [4:0] note_on_out;
 
    midi_decode midi_decoder(
       .midi_Data_in(midi_data_in),
       .rst_in(sys_rst_camera),
-      .clk_in(clk_camera),
+      .clk_in(clk_100_passthrough),
       .velocity_out(velocity_out),
       .received_note_out(received_note_out),
       .channel_out(channel_out),
@@ -466,20 +467,17 @@ module top_level (
    // note that midi_burst will not always take BURST_DURATION CYCLES
    // If it receives 5 notes before BURST_DURATION CYCLES,
    // then it will output its data
-   midi_burst #(.BURST_DURATION(1_500_000)) note_collector(
+   midi_burst #(.BURST_DURATION(750_000)) note_collector(
       .midi_velocity_in(velocity_out),
       .midi_received_note_in(received_note_out),
       .midi_channel_in(channel_out),
       .midi_data_ready_in(midi_data_ready),
       .midi_status_in(midi_msg_type),
       .rst_in(sys_rst_camera),
-      .clk_in(clk_camera),
-      .burst_notes_on_out(burst_on),
-      .burst_notes_off_out(burst_off),
-      .burst_ready_out(burst_ready),
-      .on_msg_count_out(on_count),
-      .off_msg_count_out(off_count),
-      .only_off_msgs_out(only_off)
+      .clk_in(clk_100_passthrough),
+      .burst_notes_out(burst_on),
+      .burst_refresh_out(burst_change),
+      .note_on_out(note_on_out)
    );
 //seven segment for debugging
 // logic [6:0] ss_c;
@@ -509,61 +507,65 @@ module top_level (
    // sample it based off note_octave, put into sound_wave
 
    logic spk_out;
-   logic change_pwm;
-   logic valid_sig_data,pwm_ready;
+   logic pwm_ready;
+   logic valid_sig_data;
+   logic [2:0] debug_state;
+   logic [2:0] msg_cnt;
    logic [7:0] pwm_in;
-   logic [11:0] val;
+   logic [31:0] val;
    logic [7:0] wait_val;
+   logic [2:0] mods_done;
    logic [3:0] octave_count [4:0];
-   logic [7:0] note_value_array [4:0];
+   logic [3:0] note_value_array [4:0];
    logic [7:0] note_velocity_array [4:0];
 
    pwm_combine synth(
-      .clk_in(clk_camera),
+      .clk_in(clk_100_passthrough),
       .rst_in(sys_rst_camera),
-      .midi_burst_ready_in(burst_ready),
-      .on_msg_count_in(on_count),
+      .midi_burst_change_in(burst_change),
+      .on_array_in(note_on_out),
       .midi_burst_data_in(burst_on),
-      .vals_ready(valid_sig_data),
       .octave_count(octave_count),
       .note_value_array(note_value_array),
-      .only_off_msgs(only_off),
-      .note_velocity_array(note_velocity_array)
+      .note_velocity_array(note_velocity_array),
+      .midi_data_parsed_ready_out(valid_sig_data),
+      .pwm_data_ready_out(pwm_ready),
+      .pwm_data_out(sound_wave)
+      
+      ,.state_out(debug_state)
+      ,.msg_count(msg_cnt)
+      ,.mods_done(mods_done)
    );
 
-   sine_machine sine(
-      .clk_in(clk_camera),
-      .rst_in(sys_rst_camera),
-      .note_number_in(note_value_array[0]),
-      .valid_data_in(valid_sig_data),
-      .only_off_msgs(only_off),
-      .octave_in(octave_count[0]),
-      .sig_out(sound_wave),
-      .sig_ready(pwm_ready)
-   );
-
-   always_ff @(posedge clk_camera)begin
+   always_ff @(posedge clk_100_passthrough)begin
       if(pwm_ready)begin
          pwm_in <= sound_wave;
       end
+      if(burst_change)begin
+         count <= count + 1;
+      end
+      // pwm_in <= sound_wave;
+      // if(burst_change)begin
+      //    val  <= note_on_out;
+      // end
       if(valid_sig_data)begin
-         val <= {note_value_array[0],octave_count[0]};
+         val <= {mods_done,1'b0,msg_cnt,note_on_out[4:1],sound_wave,octave_count[4],note_value_array[4],1'b0,debug_state};
       end
    end
    
-//    logic [6:0] ss_c;
-// seven_segment_controller debug_ssc(
-//   .clk_in(clk_camera),
-//   .rst_in(sys_rst_camera),
-//   .val_in(val),
-//   .cat_out(ss_c),
-//   .an_out({ss0_an, ss1_an})
-// );
-// assign ss0_c = ss_c;
-// assign ss1_c = ss_c;
+   logic [6:0] ss_c;
+seven_segment_controller debug_ssc(
+  .clk_in(clk_100_passthrough),
+  .rst_in(sys_rst_camera),
+  .val_in(val),
+  .cat_out(ss_c),
+  .an_out({ss0_an, ss1_an})
+);
+assign ss0_c = ss_c;
+assign ss1_c = ss_c;
 
    pwm audio_out
-   (.clk_in(clk_camera),
+   (.clk_in(clk_100_passthrough),
    .rst_in(sys_rst_camera),
    .dc_in(pwm_in),
    .sig_out(spk_out)
@@ -572,7 +574,6 @@ module top_level (
    // set both output channels equal to the same PWM signal!
    assign spkl = spk_out;
    assign spkr = spk_out;
-
 // Staff Creation & Image Sprite_________________________________________________________________________________
 
    logic [7:0] notes [4:0];

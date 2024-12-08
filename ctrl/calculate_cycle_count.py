@@ -6,6 +6,6 @@ fundamental_notes = {
 }
 cycles = []
 for freq in fundamental_notes.keys():
-    cycles.append(round(200_000_000*440/(8000*freq)))
+    cycles.append(round(100_000_000*440/(8000*freq)))
 cycles_dict = {note:cycle for (cycle,note) in zip(cycles,fundamental_notes.values())}
 print(cycles_dict)
