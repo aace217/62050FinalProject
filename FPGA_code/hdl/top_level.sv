@@ -559,7 +559,7 @@ module top_level (
       end
    end
    
-   logic [6:0] ss_c;
+//    logic [6:0] ss_c;
 // seven_segment_controller debug_ssc(
 //   .clk_in(clk_100_passthrough),
 //   .rst_in(sys_rst_camera),
@@ -583,7 +583,7 @@ module top_level (
 // Staff Creation & Image Sprite_________________________________________________________________________________
 
    logic [7:0] notes [4:0];
-   logic [29:0] durations [4:0];
+   logic [31:0] durations [4:0];
    logic [11:0] note_memory [4:0][63:0];
 
    // testing with fake midi signals
@@ -625,11 +625,15 @@ module top_level (
    logic [15:0] note_mem;
    logic [31:0] met_test;
    logic [5:0] staff_cell;
-   logic storing_state, storing_state_check;
+   logic [3:0] storing_state, storing_state_check;
 
    logic [3:0] note_rhythms [4:0];
+   logic [4:0][5:0] start_staff_cell;
 
-   
+   logic valid_note_pixel;
+   logic [12:0] detected_note [4:0];
+   logic [12:0] num_pixels;
+
    note_storing_run_it_back eom (
       .clk_in(clk_100_passthrough),
       .rst_in(sys_rst_camera),
@@ -639,12 +643,16 @@ module top_level (
       .durations_in(durations),
       .addr_out(addra_note),
       .mem_out(note_mem),
+      .valid_note_out(valid_note_pixel),
       .note_memory(note_memory),
       .sixteenth_metronome(met_test),
       .current_staff_cell(staff_cell),
       .storing_state_out(storing_state),
-      .note_rhythms(note_rhythms)
-   );
+      .note_rhythms(note_rhythms),
+      .start_staff_cell(start_staff_cell),
+      .detected_note(detected_note),
+      .num_pixels(num_pixels)
+  );
 
    logic [15:0] addrb_bram;
    always_ff @(posedge clk_camera) begin
@@ -655,7 +663,7 @@ module top_level (
    blk_mem_gen_0 frame_buffer_midi (
       .addra(addra_note), //pixels are stored using this math
       .clka(clk_100_passthrough),
-      .wea(1),
+      .wea(valid_note_pixel),
       .dina(note_mem),
       .ena(1'b1),
       .douta(), //never read from this side
@@ -703,7 +711,7 @@ module top_level (
    (.clk_in(clk_100_passthrough),
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({durations[0][29:18], note_rhythms[0], notes[0], 2'b0, staff_cell}),
+   .val_in({8'b0, storing_state, note_rhythms[0],  2'b0, start_staff_cell[0], 2'b0, staff_cell}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );

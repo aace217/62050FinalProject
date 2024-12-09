@@ -10,7 +10,7 @@ module note_duration_run_it_back (
     input wire clk_in,
     input wire rst_in,
     output logic [7:0] notes_out[4:0],
-    output logic [29:0] durations_out[4:0]
+    output logic [31:0] durations_out[4:0]
 );
 
 logic [3:0] prev_notes [4:0];
