@@ -560,15 +560,15 @@ module top_level (
    end
    
    logic [6:0] ss_c;
-seven_segment_controller debug_ssc(
-  .clk_in(clk_100_passthrough),
-  .rst_in(sys_rst_camera),
-  .val_in(val),
-  .cat_out(ss_c),
-  .an_out({ss0_an, ss1_an})
-);
-assign ss0_c = ss_c;
-assign ss1_c = ss_c;
+// seven_segment_controller debug_ssc(
+//   .clk_in(clk_100_passthrough),
+//   .rst_in(sys_rst_camera),
+//   .val_in(val),
+//   .cat_out(ss_c),
+//   .an_out({ss0_an, ss1_an})
+// );
+// assign ss0_c = ss_c;
+// assign ss1_c = ss_c;
 
    pwm audio_out
    (.clk_in(clk_100_passthrough),

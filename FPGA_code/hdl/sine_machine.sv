@@ -143,7 +143,7 @@ module sine_machine(
         .RAM_WIDTH(8),                       // Specify RAM data width
         .RAM_DEPTH(8000),                    // Specify RAM depth (number of entries)
         .RAM_PERFORMANCE("HIGH_PERFORMANCE"), // Select "HIGH_PERFORMANCE" or "LOW_LATENCY"
-        .INIT_FILE(`FPATH(piano_data.mem))    // Specify name/location of RAM initialization file
+        .INIT_FILE(`FPATH(audio_data.mem))    // Specify name/location of RAM initialization file
     ) piano_data (
         .addra(sample_count),                   // Address bus
         .dina(0),                            // RAM input data (not used in read-only)
