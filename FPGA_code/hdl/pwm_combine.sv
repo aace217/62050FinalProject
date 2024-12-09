@@ -26,7 +26,7 @@ module pwm_combine(
     // TODO: define something to react to the velocity
     // Need to store notes in the following order from 0 to 11:
     // C, C#, D, D#, E, F, F#, G, G#, A, A#, B
-
+    parameter SAMPLE_RATE = 2268*2;
     //logic [2:0] msg_count;
     logic [3:0] intermed_oct[4:0];
     logic [3:0] oct_buf [4:0];
@@ -35,21 +35,39 @@ module pwm_combine(
     logic [7:0] sine_data [4:0];
     logic [7:0] sine_buf [4:0];
     logic [7:0] sine_buf4;
-    logic signed [15:0] sum;
+    logic [17:0] cycle_wait_array [4:0];
+    logic [17:0] smallest_cycle_wait;
+    logic [2:0] smallest_cycle_wait_index,smallest_cycle_wait_index_buf;
+    logic signed [15:0] sum,shifted_sum;
     logic [4:0] start_sines;
+    logic [$clog2(SAMPLE_RATE)-1:0] sample_rate_count;
     //logic [2:0] mods_done;
     logic [4:0] mod_done;
     logic [4:0] valid_buf;
     logic [2:0] done_buf;
     logic [2:0] intermed_msg_count;
     logic [4:0] sine_generated;
+    logic [7:0] reset_val;
     logic good_data;
     logic rst_mod,rst_sin;
     always_comb begin
-        done_buf = ((valid_buf[4])?mod_done[4]:0) + ((valid_buf[3])?mod_done[3]:0) + ((valid_buf[2])?mod_done[2]:0) + ((valid_buf[1])?mod_done[1]:0) + ((valid_buf[0])?mod_done[0]:0);
-        intermed_msg_count = on_array_in[4] + on_array_in[3] + on_array_in[2] + on_array_in[1] + on_array_in[0];
+        done_buf = ((valid_buf[4])?mod_done[4]:0) + ((valid_buf[3])?mod_done[3]:0) + ((valid_buf[2])?mod_done[2]:0) + ((valid_buf[1])?mod_done[1]:0);
+        intermed_msg_count = on_array_in[4] + on_array_in[3] + on_array_in[2] + on_array_in[1];
         sine_buf4 = sine_buf[4];
-        sum = ((valid_buf[4])?($signed({1'b0,sine_data[4]>>1})-64):0) + ((valid_buf[3])?($signed({1'b0,sine_data[3]>>2})-32):0) + ((valid_buf[2])?($signed({1'b0,sine_data[2]>>2})-32):0) + ((valid_buf[1])?($signed({1'b0,sine_data[1]>>2})-64):0) + ((valid_buf[0])?($signed({1'b0,sine_data[0]>>2})-64):0) + 128;
+        //sum = ((valid_buf[4])?($signed({1'b0,sine_data[4]})-128):0) + ((valid_buf[3])?($signed({1'b0,sine_data[3]})-128):0) + ((valid_buf[2])?($signed({1'b0,sine_data[2]})-128):0) + ((valid_buf[1])?($signed({1'b0,sine_data[1]})-128):0) + ((valid_buf[0])?($signed({1'b0,sine_data[0]})-128):0) + 128;
+        //sum = ((valid_buf[4])?($signed({1'b0,sine_data[4]})-128):0) + ((valid_buf[3])?($signed({1'b0,sine_data[3]>>2})-32):0) + ((valid_buf[2])?($signed({1'b0,sine_data[2]}>>2)-32):0) + ((valid_buf[1])?($signed({1'b0,sine_data[1]}>>2)-32):0) + 128;
+        sum = ((valid_buf[4])?($signed({1'b0,sine_data[4]})-128):0) + ((valid_buf[3])?($signed({1'b0,sine_data[3]})-128):0) + ((valid_buf[2])?($signed({1'b0,sine_data[2]})-128):0) + ((valid_buf[1])?($signed({1'b0,sine_data[1]})-128):0) + 128;
+        shifted_sum = sum>>>2;
+        //shifted_sum = sum;
+        // smallest_cycle_wait_index = 4;
+        // smallest_cycle_wait = 18'b11_1111_1111_1111_1111;
+        // for(int i = 0; i<5; i = i + 1)begin
+        //     if((cycle_wait_array[i]<smallest_cycle_wait) && (cycle_wait_array[i] != 0))begin
+        //         smallest_cycle_wait = cycle_wait_array[i];
+        //         smallest_cycle_wait_index = i;
+        //     end
+        // end
+        reset_val = 127;
     end
     // changes to incorporate more notes:
     // 1.) Shift the sum of 2 waves by two to ensure that it is not bad data
@@ -64,9 +82,11 @@ module pwm_combine(
             msg_count <= 0;
             pwm_data_ready_out <= 0;
             midi_data_parsed_ready_out <= 0;
-            pwm_data_out <= 0;
+            pwm_data_out <= reset_val;
             good_data <= 0;
             valid_buf <= 0;
+            smallest_cycle_wait_index_buf <= 0;
+            sample_rate_count <= 0;
             combine_state <= IDLE;
             for(int n = 0; n<5; n = n + 1)begin
                 octave_count[n] <= 0;
@@ -82,8 +102,10 @@ module pwm_combine(
                 IDLE: begin
                     //msg_count <= intermed_msg_count;
                     pwm_data_ready_out <= 0;
-                    pwm_data_out <= 0;
+                    //pwm_data_out <= reset_val;
                     mods_done <= 0;
+                    sample_rate_count <= 0;
+                    smallest_cycle_wait_index_buf <= 0;
                     //good_data <= 0;
                     if(midi_burst_change_in && intermed_msg_count != 0)begin
                         // there is valid data, capture it
@@ -150,8 +172,10 @@ module pwm_combine(
                             mods_done <= 0;
                             valid_buf <= on_array_in;
                             msg_count <= intermed_msg_count;
-                            pwm_data_out <= 0;
+                            //pwm_data_out <= reset_val;
                             pwm_data_ready_out <= 0;
+                            sample_rate_count <= 0;
+                            smallest_cycle_wait_index_buf <= 0;
                             //good_data <= 0;
                             for(int j = 0; j<5; j = j + 1)begin
                                 note_velocity_array[j] <= midi_burst_data_in[j][7:0];
@@ -164,16 +188,22 @@ module pwm_combine(
                             end
                         end
                     end else begin
-                        if(sine_generated[4] || sine_generated[3] || sine_generated[2] || sine_generated[1] || sine_generated[0])begin
+                        
+                        //if(sine_generated[4] || sine_generated[3] || sine_generated[2] || sine_generated[1])begin
+                       // if(sine_generated[smallest_cycle_wait_index])begin
+                        if(sample_rate_count == SAMPLE_RATE)begin
                             pwm_data_ready_out <= 1;
-                            if($signed(sum) > 255)begin
+                            sample_rate_count <= 0;
+                            if($signed(shifted_sum) > 255)begin
                                 pwm_data_out <= 255;
-                            end else if(sum[15] == 1)begin
-                                pwm_data_out <= 8'b0;
+                            end else if(shifted_sum < 0)begin
+                                pwm_data_out <= 0;
                             end else begin
                                 // maybe it is going into this case
-                                pwm_data_out <= sum;
+                                pwm_data_out <= shifted_sum;
                             end
+                        end else begin
+                            sample_rate_count <= sample_rate_count+1;
                         end
                     end
                 end
@@ -241,28 +271,31 @@ module pwm_combine(
       .clk_in(clk_in),
       .rst_in(rst_in),
       .note_number_in(note_value_array[0]),
-      .valid_data_in(start_sines),
+      .valid_data_in(start_sines[0]),
       .octave_in(octave_count[0]),
       .sig_out(sine_data[0]),
-      .sig_change(sine_generated[0])
+      .sig_change(sine_generated[0]),
+      .cycle_wait(cycle_wait_array[0])
    );
    sine_machine sine1(
       .clk_in(clk_in),
       .rst_in(rst_in),
       .note_number_in(note_value_array[1]),
-      .valid_data_in(start_sines),
+      .valid_data_in(start_sines[1]),
       .octave_in(octave_count[1]),
       .sig_out(sine_data[1]),
-      .sig_change(sine_generated[1])
+      .sig_change(sine_generated[1]),
+      .cycle_wait(cycle_wait_array[1])
    );
    sine_machine sine2(
       .clk_in(clk_in),
       .rst_in(rst_in),
       .note_number_in(note_value_array[2]),
-      .valid_data_in(start_sines),
+      .valid_data_in(start_sines[2]),
       .octave_in(octave_count[2]),
       .sig_out(sine_data[2]),
-      .sig_change(sine_generated[2])
+      .sig_change(sine_generated[2]),
+      .cycle_wait(cycle_wait_array[2])
    );
    sine_machine sine3(
       .clk_in(clk_in),
@@ -271,7 +304,8 @@ module pwm_combine(
       .valid_data_in(start_sines[3]),
       .octave_in(octave_count[3]),
       .sig_out(sine_data[3]),
-      .sig_change(sine_generated[3])
+      .sig_change(sine_generated[3]),
+      .cycle_wait(cycle_wait_array[3])
    );
    sine_machine sine4(
       .clk_in(clk_in),
@@ -280,7 +314,8 @@ module pwm_combine(
       .valid_data_in(start_sines[4]),
       .octave_in(octave_count[4]),
       .sig_out(sine_data[4]),
-      .sig_change(sine_generated[4])
+      .sig_change(sine_generated[4]),
+      .cycle_wait(cycle_wait_array[4])
    );
     always_ff @(posedge clk_in)begin
         state_out <= combine_state;

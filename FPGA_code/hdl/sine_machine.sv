@@ -11,7 +11,9 @@ module sine_machine(
         input wire [3:0] note_number_in,
         input wire [3:0] octave_in,
         input wire valid_data_in,
+        input wire piano_note_in,
         output logic sig_change,
+        output logic [17:0] cycle_wait,
         output logic [7:0] sig_out);
 // formula for CYCLE_WAIT = CLOCK_FREQUENCY*440/(8000*f) where f is the desired frequency
 // all the values are precomputed in python
@@ -19,12 +21,12 @@ module sine_machine(
 // purpose of this module is to take in any of the 128 midi notes
 // and output the sine waves for that note
 // it will do the appropriate reading rates and stuff to get the correct note
-    logic [12:0] sample_count;
+    logic [20:0] sample_count;
     logic [17:0] prelim_cycle_wait; // Number of clock cycles per sample for 440 Hz
-    logic [17:0] sample_rate_counter;  // Counter to scale the clock frequency to 440 Hz
-    logic [17:0] cycle_wait;
+    logic [20:0] sample_rate_counter;  // Counter to scale the clock frequency to 440 Hz
+    //logic [17:0] cycle_wait;
     logic [4:0] octave_hold;
-    logic [7:0] sine_buf;
+    logic [7:0] sine_buf,piano_mem_out,sine_mem_out;
     
     enum logic [2:0] {IDLE,SETTING_READ_RATE, READING} waveform_state; // do not want to change reading rate mid read
    always_ff @(posedge clk_in)begin
@@ -37,6 +39,7 @@ module sine_machine(
             prelim_cycle_wait <= 0;
             octave_hold <= 0;
             sig_out <= 0;
+            cycle_wait <= 0;
         end else begin
             case(waveform_state)
                 IDLE: begin
@@ -45,6 +48,7 @@ module sine_machine(
                     sample_rate_counter <= 0;
                     octave_hold <= 0;
                     sig_out <= 0;
+                    cycle_wait <= 0;
                     if(valid_data_in)begin
                         // you only want to change reading rate when new data comes in
                         waveform_state <= SETTING_READ_RATE;
@@ -87,7 +91,8 @@ module sine_machine(
                         sample_count <= 0;
                         sample_rate_counter <= 0;
                         prelim_cycle_wait <= 0;
-                        sig_out <= 0;
+                        //sig_out <= 0;
+                        cycle_wait <= 0;
                         waveform_state <= SETTING_READ_RATE;
                         octave_hold <= octave_in;
                         case (note_number_in)
@@ -110,7 +115,7 @@ module sine_machine(
                         if (sample_count == 7999) begin// Reset the address to the start once it exceeds the memory depth (8000 samples)
                             // done reading the audio file
                             sample_count <= 0;
-                            waveform_state <= IDLE;
+                            //waveform_state <= IDLE;
                             prelim_cycle_wait <= 0;
                             octave_hold <= 0;    
                         end else begin
@@ -121,7 +126,7 @@ module sine_machine(
                                 sig_change <= 1;  // Signal that data is ready
                             end else begin
                                 sample_rate_counter <= sample_rate_counter + 1;
-                                sig_change <= 0;  // Not ready unless the counter hits the sample rate
+                                //sig_change <= 0;  // Not ready unless the counter hits the sample rate
                             end
                         end
                     end
@@ -138,8 +143,8 @@ module sine_machine(
         .RAM_WIDTH(8),                       // Specify RAM data width
         .RAM_DEPTH(8000),                    // Specify RAM depth (number of entries)
         .RAM_PERFORMANCE("HIGH_PERFORMANCE"), // Select "HIGH_PERFORMANCE" or "LOW_LATENCY"
-        .INIT_FILE(`FPATH(audio_data.mem))    // Specify name/location of RAM initialization file
-    ) image_mem (
+        .INIT_FILE(`FPATH(piano_data.mem))    // Specify name/location of RAM initialization file
+    ) piano_data (
         .addra(sample_count),                   // Address bus
         .dina(0),                            // RAM input data (not used in read-only)
         .clka(clk_in),                       // Clock
