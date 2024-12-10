@@ -17,7 +17,7 @@ module note_storing_position(
     output logic [3:0] notes_out [4:0],
     
     output logic [4:0][7:0] y_dot_out,
-    output logic [7:0] y_stem
+    output logic [7:0] y_stem_out
 );
 
 //________________________________________________________________________
@@ -118,6 +118,7 @@ end
 // GET Y POSITION OF INPUT NOTE + STEM
 
 logic [4:0][7:0] y_dot, y_highest, y_lowest;
+logic [7:0] y_stem;
 
 always_comb begin
     for (int i = 0; i < 5; i++) begin
@@ -132,13 +133,23 @@ always_comb begin
             default: y_dot[i] = 150;
         endcase
     end
+    // max y_dot is 354
 
-    y_highest = 8'h00;
-    y_lowest = 8'hFF;
-    for (int i = 0; i < 5; i ++) begin
-        if (notes_in[i] != 8'hFF) begin
-            
-        end
+    y_highest = y_dot[0];
+    y_lowest = y_dot[0];
+    if (y_dot[1] > y_highest) y_highest = y_dot[1];
+    if (y_dot[2] > y_highest) y_highest = y_dot[2];
+    if (y_dot[3] > y_highest) y_highest = y_dot[3];
+    if (y_dot[4] > y_highest) y_highest = y_dot[4];
+    if (y_dot[1] > y_lowest) y_lowest = y_dot[1];
+    if (y_dot[2] > y_lowest) y_lowest = y_dot[2];
+    if (y_dot[3] > y_lowest) y_lowest = y_dot[3];
+    if (y_dot[4] > y_lowest) y_lowest = y_dot[4];
+    
+    if ((354 - y_highest) > y_lowest) begin // whichever one is closer to center
+        y_stem = y_highest + 18;
+    end else begin
+        y_stem = y_lowest - 7;
     end
 end
 
@@ -148,48 +159,9 @@ always_ff @(posedge clk_in) begin
         y_stem <= 0;
     end else begin
         y_dot_out <= y_dot;
-
+        y_stem_out <= y_stem;
     end
-
 end
-
-
-
-// // find the highest/lowest note in the chord
-// logic [7:0] highest_note, lowest_note, extreme_note;
-// always_ff @(posedge clk_in) begin
-//     if (rst_in) begin
-//         highest_note <= 8'h00;
-//         lowest_note <= 8'h08;
-//     end else begin
-//         for (int i = 0; i < 5; i ++) begin
-//             if (notes_in[i] != 8'hFF) begin
-//                 highest_note <= (notes_in[i][7:4] + 12*notes_in[i][3:0] > highest_note[7:4] + 12 * highest_note[3:0])? notes_in[i] : highest_note;
-//                 lowest_note <= (notes_in[i][7:4] + 12*notes_in[i][3:0] < lowest_note[7:4] + 12 * lowest_note[3:0])? notes_in[i] : lowest_note;
-//             end
-//         end
-//         if ((127 - highest_note[7:4] + 12 * highest_note[3:0]) > lowest_note[7:4] + 12 * lowest_note[3:0]) begin
-//             extreme_note <= highest_note;
-//         end else begin
-//             extreme_note <= lowest_note;
-//       end
-//     end
-// end
-
-// always_comb begin
-//     case (extreme_note[7:4])
-//         0,1: y_stem = 0 + 6*7*(8 - extreme_note[3:0]);  // C; 7 notes per octave, 6 vertical pixels per note
-//         2,3: y_stem  = 18 + 6*7*(8 - extreme_note[3:0]);  // D sharp; 7 notes per octave, 6 pixels per note
-//         4: y_stem = 15 + 6*7*(8 - extreme_note[3:0]);  // E; 7 notes per octave, 6 pixels per note
-//         5,6: y_stem = 12 + 6*7*(8 - extreme_note[3:0]);  // F; 7 notes per octave, 6 pixels per note  
-//         7,8: y_stem = 9 + 6*7*(8 - extreme_note[3:0]);  // G; 7 notes per octave, 6 pixels per note        
-//         9,10: y_stem = 6 + 6*7*(8 - extreme_note[3:0]);  // A; 7 notes per octave, 6 pixels per note          
-//         11: y_stem = 3 + 6*7*(8 - extreme_note[3:0]);  // B; 7 notes per octave, 6 pixels per note        
-//         default: y_stem = 150;
-//     endcase
-// end
-
-
 
 endmodule
 `default_nettype wire
