@@ -332,6 +332,7 @@ module top_level (
 
    logic [1:0] set_bpm;
    logic [1:0] set_bpm_buf;
+   assign record_on = sw[0];
    assign set_bpm = sw[6:5];
    // sw == 00: don't set bpm
    // sw == 01: set bpm with baton
@@ -471,7 +472,7 @@ module top_level (
    staff_saver replayer(
       .clk_in(clk_100_passthrough),
       .rst_in(sys_rst_camera),
-      .record_in(sw[0]),
+      .record_in(record_on),
       .valid_staff_record_in(valid_staff_record_out),
       .note_memory(note_memory), // from note_storing_run_it_back
       .midi_velocity_record_out(midi_velocity_record_out), 
@@ -483,11 +484,11 @@ module top_level (
    // If it receives 5 notes before BURST_DURATION CYCLES,
    // then it will output its data
    midi_burst #(.BURST_DURATION(750_000)) note_collector(
-      .midi_velocity_in((sw[0])?midi_velocity_record_out:velocity_out),
-      .midi_received_note_in((sw[0])?midi_received_note_record_out:received_note_out),
-      .midi_channel_in((sw[0])?0:channel_out),
-      .midi_data_ready_in((sw[0])?record_data_ready:midi_data_ready),
-      .midi_status_in((sw[0])?record_data_midi_status:midi_msg_type),
+      .midi_velocity_in((record_on)?midi_velocity_record_out:velocity_out),
+      .midi_received_note_in((record_on)?midi_received_note_record_out:received_note_out),
+      .midi_channel_in(record_on)?0:channel_out),
+      .midi_data_ready_in((record_on)?record_data_ready:midi_data_ready),
+      .midi_status_in((record_on)?record_data_midi_status:midi_msg_type),
       .rst_in(sys_rst_camera),
       .clk_in(clk_100_passthrough),
       .burst_notes_out(burst_on),
