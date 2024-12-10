@@ -587,8 +587,9 @@ module top_level (
    logic [11:0] note_memory [4:0][63:0];
 
    // testing with fake midi signals
-   logic [3:0] octave_test [4:0];
-   logic [3:0] note_test [4:0];
+   logic [3:0] octave_draw_in [4:0];
+   logic [3:0] note_draw_in [4:0];
+   logic valid_draw_in;
    logic [4:0] note_on_test;
    logic [3:0] btn_clean;
 
@@ -599,29 +600,40 @@ module top_level (
       .clean_out(btn_clean)
    );
 
-   assign note_on_test[0] = (btn_clean)? 1 : 0;
-   assign note_on_test[1] = 0;
-   assign note_on_test[2] = (btn[2])? 1 : 0;
-   assign note_on_test[3] = (btn[3])? 1 : 0;
-   assign note_on_test[4] = 0;
+   always_comb begin
+      if (sw[6]) begin
+         assign note_on_test[0] = (btn_clean)? 1 : 0;
+         assign note_on_test[1] = 0;
+         assign note_on_test[2] = (btn[2])? 1 : 0;
+         assign note_on_test[3] = (btn[3])? 1 : 0;
+         assign note_on_test[4] = 0;
 
-   assign octave_test[0] = (btn_clean)? 5 : 0;
-   assign octave_test[1] = 0;
-   assign octave_test[2] = (btn[2])? 4 : 0;
-   assign octave_test[3] = (btn[3])? 4 : 0;
-   assign octave_test[4] = 0;
- 
-   assign note_test[0] = (btn_clean)? 2 : 0;
-   assign note_test[1] = 0;
-   assign note_test[2] = (btn[2])? 9 : 0;
-   assign note_test[3] = (btn[3])? 6 : 0;
-   assign note_test[4] = 0;
+         assign octave_draw_in[0] = (btn_clean)? 5 : 0;
+         assign octave_draw_in[1] = 0;
+         assign octave_draw_in[2] = (btn[2])? 4 : 0;
+         assign octave_draw_in[3] = (btn[3])? 4 : 0;
+         assign octave_draw_in[4] = 0;
+      
+         assign note_draw_in[0] = (btn_clean)? 2 : 0;
+         assign note_draw_in[1] = 0;
+         assign note_draw_in[2] = (btn[2])? 9 : 0;
+         assign note_draw_in[3] = (btn[3])? 6 : 0;
+         assign note_draw_in[4] = 0;
+         
+         assign valid_draw_in = 1;
+      end else begin
+         assign octave_draw_in = octave_count;
+         assign note_draw_in = note_value_array;
+         assign valid_draw_in = valid_sig_data;
+      end
    // 1 cycle
+   end
+
    note_duration_run_it_back get_notes (
-      .octave_count(octave_test),
-      .note_value_array(note_test),
+      .octave_count(octave_in),
+      .note_value_array(note_draw_in),
       .bpm(bpm_buf),
-      .valid_note_in(1),
+      .valid_note_in(valid_draw_in),
       .note_on_in(note_on_test),
       .clk_in(clk_100_passthrough),
       .rst_in(sys_rst_camera),
@@ -656,6 +668,7 @@ module top_level (
       .mem_out(note_mem),
       .valid_note_out(valid_note_pixel),
       .note_memory(note_memory),
+      .valid_staff_record_out(),
       .sixteenth_metronome(met_test),
       .current_staff_cell(),
       .current_staff_cell_buf(staff_cell),
