@@ -15,7 +15,7 @@ module pwm_combine(
             output logic [7:0] pwm_data_out,
             output logic [2:0] state_out,
             output logic [2:0] msg_count,
-            output logic [2:0] mods_done
+            output logic [2:0] mods_done,
             output logic [4:0] on_array_out
             );
 
