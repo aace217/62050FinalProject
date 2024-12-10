@@ -15,7 +15,8 @@ module pwm_combine(
             output logic [7:0] pwm_data_out,
             output logic [2:0] state_out,
             output logic [2:0] msg_count,
-            output logic [2:0] mods_done
+            output logic [2:0] mods_done,
+            output logic [4:0] on_array_out
             );
 
     // first it will see what notes are coming in
@@ -150,6 +151,7 @@ module pwm_combine(
                                 start_sines[i] <= 1;
                             end
                         end
+                        on_array_out <= valid_buf;
                         midi_data_parsed_ready_out <= 1;
                         combine_state <= COMBINING_WAVEFORM;
                     end else begin
