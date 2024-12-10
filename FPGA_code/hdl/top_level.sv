@@ -602,37 +602,37 @@ module top_level (
    );
 
    always_comb begin
-      if (sw[6]) begin
-         assign note_on_draw_in[0] = (btn_clean)? 1 : 0;
-         assign note_on_draw_in[1] = 0;
-         assign note_on_draw_in[2] = (btn[2])? 1 : 0;
-         assign note_on_draw_in[3] = (btn[3])? 1 : 0;
-         assign note_on_draw_in[4] = 0;
+      if (sw[7]) begin
+         note_on_draw_in[0] = (btn_clean)? 1 : 0;
+         note_on_draw_in[1] = 0;
+         note_on_draw_in[2] = (btn[2])? 1 : 0;
+         note_on_draw_in[3] = (btn[3])? 1 : 0;
+         note_on_draw_in[4] = 0;
 
-         assign octave_draw_in[0] = (btn_clean)? 5 : 0;
-         assign octave_draw_in[1] = 0;
-         assign octave_draw_in[2] = (btn[2])? 4 : 0;
-         assign octave_draw_in[3] = (btn[3])? 4 : 0;
-         assign octave_draw_in[4] = 0;
+         octave_draw_in[0] = (btn_clean)? 5 : 0;
+         octave_draw_in[1] = 0;
+         octave_draw_in[2] = (btn[2])? 4 : 0;
+         octave_draw_in[3] = (btn[3])? 4 : 0;
+         octave_draw_in[4] = 0;
       
-         assign note_draw_in[0] = (btn_clean)? 2 : 0;
-         assign note_draw_in[1] = 0;
-         assign note_draw_in[2] = (btn[2])? 9 : 0;
-         assign note_draw_in[3] = (btn[3])? 6 : 0;
-         assign note_draw_in[4] = 0;
+         note_draw_in[0] = (btn_clean)? 2 : 0;
+         note_draw_in[1] = 0;
+         note_draw_in[2] = (btn[2])? 9 : 0;
+         note_draw_in[3] = (btn[3])? 6 : 0;
+         note_draw_in[4] = 0;
          
-         assign valid_draw_in = 1;
+         valid_draw_in = 1;
       end else begin
-         assign octave_draw_in = octave_count;
-         assign note_draw_in = note_value_array;
-         assign valid_draw_in = valid_sig_data;
-         assign note_on_draw_in = pwm_on_array;
+         octave_draw_in = octave_count;
+         note_draw_in = note_value_array;
+         valid_draw_in = valid_sig_data;
+         note_on_draw_in = pwm_on_array;
       end
    // 1 cycle
    end
 
    note_duration_run_it_back get_notes (
-      .octave_count(octave_in),
+      .octave_count(octave_draw_in),
       .note_value_array(note_draw_in),
       .bpm(bpm_buf),
       .valid_note_in(valid_draw_in),
@@ -740,7 +740,8 @@ module top_level (
    (.clk_in(clk_100_passthrough),
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({durations[0][31:20], storing_state, notes[0],  2'b0, staff_cell}),
+   // .val_in({durations[0][31:20], storing_state, notes[0],  2'b0, staff_cell}),
+   .val_in({3'b0, note_on_draw_in,3'b0, valid_draw_in, note_draw_in[4], note_draw_in[3], note_draw_in[2], note_draw_in[1], note_draw_in[0]}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );
