@@ -34,7 +34,8 @@ module pwm_combine(
     logic [3:0] intermed_note [4:0];
     logic [7:0] sine_data [4:0];
     logic [7:0] sine_buf [4:0];
-    logic [7:0] sine_buf4;
+    logic signed [20:0] coef_array_buf [4:0];
+    logic [20:0] coef_array [4:0];
     logic [17:0] cycle_wait_array [4:0];
     logic [17:0] smallest_cycle_wait;
     logic [2:0] smallest_cycle_wait_index,smallest_cycle_wait_index_buf;
@@ -43,31 +44,33 @@ module pwm_combine(
     logic [$clog2(SAMPLE_RATE)-1:0] sample_rate_count;
     //logic [2:0] mods_done;
     logic [4:0] mod_done;
+    logic [3:0] calc_count;
     logic [4:0] valid_buf;
     logic [2:0] done_buf;
     logic [2:0] intermed_msg_count;
     logic [4:0] sine_generated;
     logic [7:0] reset_val;
+    logic [7:0] note_velocity_internal_buffer [4:0];
     logic good_data;
     logic rst_mod,rst_sin;
+    logic [20:0] coef1,coef2,coef3,coef4;
+    logic [20:0] coef1buf,coef2buf,coef3buf,coef4buf;
+
     always_comb begin
         done_buf = ((valid_buf[4])?mod_done[4]:0) + ((valid_buf[3])?mod_done[3]:0) + ((valid_buf[2])?mod_done[2]:0) + ((valid_buf[1])?mod_done[1]:0);
         intermed_msg_count = on_array_in[4] + on_array_in[3] + on_array_in[2] + on_array_in[1];
-        sine_buf4 = sine_buf[4];
         //sum = ((valid_buf[4])?($signed({1'b0,sine_data[4]})-128):0) + ((valid_buf[3])?($signed({1'b0,sine_data[3]})-128):0) + ((valid_buf[2])?($signed({1'b0,sine_data[2]})-128):0) + ((valid_buf[1])?($signed({1'b0,sine_data[1]})-128):0) + ((valid_buf[0])?($signed({1'b0,sine_data[0]})-128):0) + 128;
         //sum = ((valid_buf[4])?($signed({1'b0,sine_data[4]})-128):0) + ((valid_buf[3])?($signed({1'b0,sine_data[3]>>2})-32):0) + ((valid_buf[2])?($signed({1'b0,sine_data[2]}>>2)-32):0) + ((valid_buf[1])?($signed({1'b0,sine_data[1]}>>2)-32):0) + 128;
-        sum = ((valid_buf[4])?($signed({1'b0,sine_data[4]})-128):0) + ((valid_buf[3])?($signed({1'b0,sine_data[3]})-128):0) + ((valid_buf[2])?($signed({1'b0,sine_data[2]})-128):0) + ((valid_buf[1])?($signed({1'b0,sine_data[1]})-128):0) + 128;
+        sum = ((valid_buf[4])?($signed({1'b0,coef_array[4][7:0]})-128):0) + ((valid_buf[3])?($signed({1'b0,coef_array[3][7:0]})-128):0) + ((valid_buf[2])?($signed({1'b0,coef_array[2][7:0]})-128):0) + ((valid_buf[1])?($signed({1'b0,coef_array[1][7:0]})-128):0) + 128;
         shifted_sum = sum>>>2;
-        //shifted_sum = sum;
-        // smallest_cycle_wait_index = 4;
-        // smallest_cycle_wait = 18'b11_1111_1111_1111_1111;
-        // for(int i = 0; i<5; i = i + 1)begin
-        //     if((cycle_wait_array[i]<smallest_cycle_wait) && (cycle_wait_array[i] != 0))begin
-        //         smallest_cycle_wait = cycle_wait_array[i];
-        //         smallest_cycle_wait_index = i;
-        //     end
-        // end
-        reset_val = 127;
+        coef1 = coef_array[1];
+        coef2 = coef_array[2];
+        coef3 = coef_array[3];
+        coef4 = coef_array[4];
+        coef1buf = coef_array_buf[1];
+        coef2buf = coef_array_buf[2];
+        coef3buf = coef_array_buf[3];
+        coef4buf = coef_array_buf[4];
     end
     // changes to incorporate more notes:
     // 1.) Shift the sum of 2 waves by two to ensure that it is not bad data
@@ -75,7 +78,7 @@ module pwm_combine(
 
     enum logic [2:0] {IDLE,PROCESSING_DATA,RETRIEVING_WAVEFORM,COMBINING_WAVEFORM,TRANSMITTING} combine_state;
 
-    
+
     always_ff @(posedge clk_in)begin
         if(rst_in)begin
             // reset everything and should be the same thing as the IDLE state
@@ -87,6 +90,7 @@ module pwm_combine(
             valid_buf <= 0;
             smallest_cycle_wait_index_buf <= 0;
             sample_rate_count <= 0;
+            calc_count <= 0;
             combine_state <= IDLE;
             for(int n = 0; n<5; n = n + 1)begin
                 octave_count[n] <= 0;
@@ -96,6 +100,8 @@ module pwm_combine(
                 note_buf[n] <= 0;
                 sine_buf[n] <= 0;
                 start_sines[n] <= 0;
+                coef_array_buf[n] <= 0;
+                coef_array[n] <= 0;
             end
         end else begin
             case(combine_state)
@@ -106,6 +112,7 @@ module pwm_combine(
                     mods_done <= 0;
                     sample_rate_count <= 0;
                     smallest_cycle_wait_index_buf <= 0;
+                    calc_count <= 0;
                     //good_data <= 0;
                     if(midi_burst_change_in && intermed_msg_count != 0)begin
                         // there is valid data, capture it
@@ -126,6 +133,8 @@ module pwm_combine(
                             oct_buf[j] <= 0;
                             note_buf[j] <= 0;
                             start_sines[j] <= 0;
+                            coef_array_buf[j] <= 0;
+                            coef_array[j] <= 0;
                         end
                     end
                     // implicit else remain in IDLE
@@ -157,18 +166,20 @@ module pwm_combine(
                 RETRIEVING_WAVEFORM: begin
                     // now that I have the note and the octave, I can get the proper sines
                     // some for loop to go through all the note_values and get the proper note
-                    
+
                     combine_state <= COMBINING_WAVEFORM;
                 end
                 COMBINING_WAVEFORM: begin
                     // add the number of sine waves that there are notes
                     start_sines <= 0;
+                    calc_count <= 0;
                     if(midi_burst_change_in)begin
                         if(intermed_msg_count == 0)begin
                             // go back to idle if it is an empty message
                             combine_state <= IDLE;
                         end else begin
                             combine_state <= PROCESSING_DATA;
+                            calc_count <= 0;
                             mods_done <= 0;
                             valid_buf <= on_array_in;
                             msg_count <= intermed_msg_count;
@@ -185,25 +196,38 @@ module pwm_combine(
                                 note_buf[j] <= 0;
                                 sine_buf[j] <= 0;
                                 start_sines[j] <= 0;
+                                coef_array_buf[j] <= 0;
+                                coef_array[j] <= 0;
                             end
                         end
                     end else begin
                         
                         //if(sine_generated[4] || sine_generated[3] || sine_generated[2] || sine_generated[1])begin
                        // if(sine_generated[smallest_cycle_wait_index])begin
-                        if(sample_rate_count == SAMPLE_RATE)begin
-                            pwm_data_ready_out <= 1;
-                            sample_rate_count <= 0;
-                            if($signed(shifted_sum) > 255)begin
-                                pwm_data_out <= 255;
-                            end else if(shifted_sum < 0)begin
-                                pwm_data_out <= 0;
+                        if(calc_count == 2)begin
+                            if(sample_rate_count == SAMPLE_RATE)begin
+                                // send data
+                                pwm_data_ready_out <= 1;
+                                sample_rate_count <= 0;
+                                if($signed(shifted_sum) > 255)begin
+                                    pwm_data_out <= 255;
+                                end else if(shifted_sum < 0)begin
+                                    pwm_data_out <= 0;
+                                end else begin
+                                    // maybe it is going into this case
+                                    pwm_data_out <= shifted_sum;
+                                end
+                                //calc_count <= 0;
                             end else begin
-                                // maybe it is going into this case
-                                pwm_data_out <= shifted_sum;
+                                sample_rate_count <= sample_rate_count+1;
                             end
                         end else begin
-                            sample_rate_count <= sample_rate_count+1;
+                            for(int i = 0; i<5; i = i +1)begin
+                                coef_array_buf[i] <= $signed(note_velocity_array[i]) * ($signed({1'b0,sine_data[i]})-128);
+                                //coef_array[i] <= ((coef_array_buf[i]+128*note_velocity_array[i]) >>> 7);
+                                coef_array[i] <= (coef_array_buf[i]>>>7)+128;
+                            end
+                            calc_count <= calc_count + 1;
                         end
                     end
                 end
