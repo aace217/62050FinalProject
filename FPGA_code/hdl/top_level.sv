@@ -590,20 +590,28 @@ module top_level (
    logic [3:0] octave_test [4:0];
    logic [3:0] note_test [4:0];
    logic [4:0] note_on_test;
+   logic [3:0] btn_clean;
 
-   assign note_on_test[0] = (btn[1])? 1 : 0;
+   debouncer btn_deb (
+      .clk_in(clk_100_passthrough),
+      .rst_in(sys_rst_camera),
+      .dirty_in(btn[1]),
+      .clean_out(btn_clean)
+   );
+
+   assign note_on_test[0] = (btn_clean)? 1 : 0;
    assign note_on_test[1] = 0;
    assign note_on_test[2] = (btn[2])? 1 : 0;
    assign note_on_test[3] = (btn[3])? 1 : 0;
    assign note_on_test[4] = 0;
 
-   assign octave_test[0] = (btn[1])? 5 : 0;
+   assign octave_test[0] = (btn_clean)? 5 : 0;
    assign octave_test[1] = 0;
    assign octave_test[2] = (btn[2])? 4 : 0;
    assign octave_test[3] = (btn[3])? 4 : 0;
    assign octave_test[4] = 0;
  
-   assign note_test[0] = (btn[1])? 2 : 0;
+   assign note_test[0] = (btn_clean)? 2 : 0;
    assign note_test[1] = 0;
    assign note_test[2] = (btn[2])? 9 : 0;
    assign note_test[3] = (btn[3])? 6 : 0;
@@ -631,8 +639,11 @@ module top_level (
    logic [4:0][5:0] start_staff_cell;
 
    logic valid_note_pixel;
-   logic [12:0] detected_note [4:0];
+   logic [11:0] detected_note [4:0];
    logic [12:0] num_pixels;
+
+   logic [3:0] check;
+   logic [3:0] storing_state_out_test;
 
    note_storing_run_it_back eom (
       .clk_in(clk_100_passthrough),
@@ -646,12 +657,15 @@ module top_level (
       .valid_note_out(valid_note_pixel),
       .note_memory(note_memory),
       .sixteenth_metronome(met_test),
-      .current_staff_cell(staff_cell),
+      .current_staff_cell(),
+      .current_staff_cell_buf(staff_cell),
       .storing_state_out(storing_state),
+      .storing_state_out_test(storing_state_out_test),
       .note_rhythms(note_rhythms),
       .start_staff_cell(start_staff_cell),
       .detected_note(detected_note),
-      .num_pixels(num_pixels)
+      .num_pixels(num_pixels),
+      .check(check)
   );
 
    logic [15:0] addrb_bram;
@@ -711,7 +725,7 @@ module top_level (
    (.clk_in(clk_100_passthrough),
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({8'b0, storing_state, note_rhythms[0],  2'b0, start_staff_cell[0], 2'b0, staff_cell}),
+   .val_in({durations[0][31:20], storing_state, notes[0],  2'b0, staff_cell}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );
@@ -793,7 +807,7 @@ module top_level (
    logic good_addrb; //used to indicate within valid frame for scaling
 
    logic [15:0] frame_buff_raw; //data out of frame buffer; black & white
-   logic [23:0] frame_buff_valid; //data out of frame buffer; black & white
+   logic [15:0] frame_buff_valid; //data out of frame buffer; black & white
 
    always_ff @(posedge clk_camera) begin
       // addra logic
@@ -843,7 +857,7 @@ module top_level (
    always_ff @(posedge clk_pixel)begin
       addrbp1 <= good_addrb;
       addrbp2 <= addrbp1;
-      frame_buff_valid <= addrbp2? {frame_buff_raw[15:11], 3'b0, frame_buff_raw[10:5], 2'b0, frame_buff_raw[4:0], 3'b0}:23'b0;
+      frame_buff_valid <= addrbp2? frame_buff_raw:16'b0;
    end
 
    always_comb begin
@@ -852,9 +866,9 @@ module top_level (
          green = frame_buff_valid[7:0];
          blue = frame_buff_valid[7:0];
       end else begin
-         red = frame_buff_valid[23:16];
-         green = frame_buff_valid[15:8];
-         blue = frame_buff_valid[7:0];
+         red = {frame_buff_valid[15:11], 3'b0};
+         green = {frame_buff_raw[10:5], 2'b0};
+         blue = {frame_buff_raw[4:0], 3'b0};
       end
    end
    
