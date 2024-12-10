@@ -519,6 +519,7 @@ module top_level (
    logic [3:0] octave_count [4:0];
    logic [3:0] note_value_array [4:0];
    logic [7:0] note_velocity_array [4:0];
+   logic [4:0] pwm_on_array;
 
    pwm_combine synth(
       .clk_in(clk_100_passthrough),
@@ -531,8 +532,8 @@ module top_level (
       .note_velocity_array(note_velocity_array),
       .midi_data_parsed_ready_out(valid_sig_data),
       .pwm_data_ready_out(pwm_ready),
-      .pwm_data_out(sound_wave)
-      
+      .pwm_data_out(sound_wave),
+      .on_array_out(pwm_on_array)
       // ,.state_out(debug_state)
       // ,.msg_count(msg_cnt)
       // ,.mods_done(mods_done)
@@ -590,7 +591,7 @@ module top_level (
    logic [3:0] octave_draw_in [4:0];
    logic [3:0] note_draw_in [4:0];
    logic valid_draw_in;
-   logic [4:0] note_on_test;
+   logic [4:0] note_on_draw_in;
    logic [3:0] btn_clean;
 
    debouncer btn_deb (
@@ -602,11 +603,11 @@ module top_level (
 
    always_comb begin
       if (sw[6]) begin
-         assign note_on_test[0] = (btn_clean)? 1 : 0;
-         assign note_on_test[1] = 0;
-         assign note_on_test[2] = (btn[2])? 1 : 0;
-         assign note_on_test[3] = (btn[3])? 1 : 0;
-         assign note_on_test[4] = 0;
+         assign note_on_draw_in[0] = (btn_clean)? 1 : 0;
+         assign note_on_draw_in[1] = 0;
+         assign note_on_draw_in[2] = (btn[2])? 1 : 0;
+         assign note_on_draw_in[3] = (btn[3])? 1 : 0;
+         assign note_on_draw_in[4] = 0;
 
          assign octave_draw_in[0] = (btn_clean)? 5 : 0;
          assign octave_draw_in[1] = 0;
@@ -625,6 +626,7 @@ module top_level (
          assign octave_draw_in = octave_count;
          assign note_draw_in = note_value_array;
          assign valid_draw_in = valid_sig_data;
+         assign note_on_draw_in = pwm_on_array;
       end
    // 1 cycle
    end
@@ -634,7 +636,7 @@ module top_level (
       .note_value_array(note_draw_in),
       .bpm(bpm_buf),
       .valid_note_in(valid_draw_in),
-      .note_on_in(note_on_test),
+      .note_on_in(note_on_draw_in),
       .clk_in(clk_100_passthrough),
       .rst_in(sys_rst_camera),
       .notes_out(notes),
