@@ -89,7 +89,11 @@ module midi_decode(
                         channel_out <= msg[3:0]; // those bits indicate the channel #
                         received_note_out <= msg[15:8]; 
                         velocity_out <= msg[23:16];
-                        status <= (msg[7:4] == 4'b1001); // these bits indicate whether note on or off
+                        if(msg[23:16] == 0)begin
+                            status <= 0;
+                        end else begin
+                            status <= (msg[7:4] == 4'b1001); // these bits indicate whether note on or off
+                        end
                         data_ready_out <= 1;
                     end
 
