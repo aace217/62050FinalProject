@@ -24,12 +24,13 @@ module staff_saver(
     logic [11:0] ram_data_out;
     logic [7:0] midi_vel_buf1,midi_vel_buf2;
     logic [7:0] midi_note_buf1,midi_note_buf2;
+    logic [11:0] ram_data;
     logic midi_valid_buf1,midi_valid_buf2;
     logic midi_status_buf1,midi_status_buf2;
 
     assign ram_data = note_memory_buf[note_number_addr][note_cell_addr];
 
-    enum logic [1:0] {IDLE,STORE_MEM,READ_MEM} record_state;
+    enum logic [1:0] {IDLE,STORE_MEM,READMEM} record_state;
     always_ff @(posedge clk_in)begin
         if(rst_in)begin
             midi_velocity_record_out <= 0;
@@ -59,7 +60,7 @@ module staff_saver(
                     // go through the data buffer and save all of its information
                     // in the BRAM
                     if(note_cell_addr == 64)begin
-                        record_state <= READ_MEM;
+                        record_state <= READMEM;
                     end else begin
                         if(note_number_addr == 5)begin
                             note_number_addr = 0;
@@ -69,7 +70,7 @@ module staff_saver(
                         end
                     end
                 end
-                READ_MEM: begin
+                READMEM: begin
                     // go through mem addresses in the same order
                     // to read the data that was stored
                     // Data Format:

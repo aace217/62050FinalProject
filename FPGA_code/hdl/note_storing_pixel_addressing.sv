@@ -1,58 +1,117 @@
 `timescale 1ns / 1ps
 `default_nettype none
 
+`ifdef SYNTHESIS
+`define FPATH(X) `"X`"
+`else /* ! SYNTHESIS */
+`define FPATH(X) `"../../data/X`"
+`endif  /* ! SYNTHESIS */
+
+
 module note_storing_pixel_addressing(
     input wire rst_in,
     input wire clk_in,
-    input logic [11:0] detected_note_out [4:0],
-    input logic [4:0] [7:0] y_dot_out,
-    input logic [7:0]  y_stem_out,
-    input logic [4:0] sharp_shift_out [2:0],
-    input logic [4:0] rhythm_shift_out [7:0],
-    input logic [4:0] note_width_out [6:0],
-    input logic [5:0] current_staff_cell_out,
-    input logic [4:0] start_staff_cell_out
+    
+    input wire [11:0] detected_note_in [4:0],
+    input wire [5:0] current_staff_cell_in,
+    
+    input wire [4:0] [7:0] y_dot_in,
+    input wire [7:0]  y_stem_in,
+    
+    input wire [2:0] sharp_shift_in [4:0],
+    input wire [7:0] rhythm_shift_in [4:0],
+    input wire [6:0] note_width_in [4:0],
+
+    output logic [15:0] addr_out,
+    output logic [15:0] mem_out,
+    output logic valid_note_out,
+    output logic [11:0] note_memory [4:0][63:0],
+    output logic valid_staff_record_out
+
 );
 
-//________________________________________________________________________
 // STORING PIXELS OF CORRESPONDING NOTES
 // this all needs to happen within 3_000_000_000 cycles
 
 localparam STAFF_SHIFT = 66; // top of staff is 141 when not shifted; want to be at 75: 141 - 66 = 75
 localparam STAFF_HEIGHT = 35;
+localparam [3:0] SIXTEENTH = 1;
+localparam [3:0] NULL = 13;
 enum logic [4:0] {INIT = 0, IDLE = 1, NOTE = 2, REST = 3, STEM = 4, SPLIT_NOTE = 5} storing_state;
 
-assign storing_state_out = storing_state;
+logic [5:0] current_staff_cell_buf;
+
+always_ff @(posedge clk_in) begin
+    if (rst_in) begin
+        valid_staff_record_out <= 0;
+        current_staff_cell_buf <= 0;
+    end else begin
+        valid_staff_record_out <= (current_staff_cell_in == 63)? 1 : 0;
+        current_staff_cell_buf <= current_staff_cell_in;
+    end
+end
+
+// assign storing_state_out = storing_state;
 
 logic [4:0][8:0] x_start;
 logic [4:0] [7:0] y_start; // c0 -> c8 leads to 336 possible y locations
-logic [8:0] x_counter; // can go up to 80 for notes
+logic [8:0] x_counter, x_out, x_out1, x_out2; // can go up to 80 for notes
 logic [7:0] y_counter, y_out, y_out1, y_out2; // can go up to 7 for notes
-
+logic [2:0] note_ind;
 
 logic [15:0] addr_buf1, addr_buf2; 
 logic valid_note_buf1, valid_note_buf2;   
 
-logic already_drawn;
-logic [2:0] rest_measures;
+logic [4:0] [7:0] y_dot_buf;
+logic [7:0]  y_stem_buf;
+logic [4:0] sharp_shift_buf [2:0];
+logic [4:0] rhythm_shift_buf [7:0];
+logic [4:0] note_width_buf [6:0];
 
+logic already_drawn;
+
+logic [2:0] rest_measures;
+logic note_change_valid;
+
+logic [4:0] start_staff_cell;
 
 always_ff @(posedge clk_in) begin
     if (rst_in) begin
         storing_state <= INIT;
         start_staff_cell <= 0;
+        
         x_start <= 0;
         y_start <= 0;
         x_counter <= 0;
         y_counter <= 0;
+
+        x_out <= 0;
+        x_out1 <= 0;
+        x_out2 <= 0;
+        y_out <= 0;
+        y_out1 <= 0;
+        y_out2 <= 0;
+
+        for (int i = 0; i < 5; i ++) begin
+            for (int j = 0; j < 64; j++) begin
+            note_memory[i][j] <= (j == 0 || j == 80 || j == 160 || j == 240)? 12'hFFF : 12'hDFF; // F is whole rest, D is null value in memory
+            end
+        end
+
         image_addr <= 0;
         addr_out <= 0;   
-        valid_note_out <= 0;   
-        num_pixels <= 0;  
+        addr_buf1 <= 0;
         addr_buf2 <= 0;
-        addr_out <= 0;
-        check <= 0;
+        
+        valid_note_out <= 0;   
+        valid_note_buf1 <= 0;   
+        valid_note_buf2 <= 0;   
+        // check <= 0;
         already_drawn <= 0;
+        rest_measures <= 0;
+        note_change_valid <= 0;
+        note_ind <= 0;
+
     end else begin
         case (storing_state) // all happens within the same current_staff_cell, hopefully
             INIT: begin
@@ -71,65 +130,70 @@ always_ff @(posedge clk_in) begin
                 rest_measures <= (x_counter == (79) && y_counter == 24)? (rest_measures == 4)? 0 : rest_measures + 1 : rest_measures;
                 x_counter <= (x_counter == 79)? 0: x_counter + 1;
                 y_counter <= (x_counter == 79)? (y_counter == 24)? 0: y_counter + 1 : y_counter;
-                // make a second x y counter for the entire hdmi screen separately; above is counter for image 
+
                 image_addr <= (y_counter + 50) * 265 + (x_counter + 185); // white pixel at address 19874 - white out if no note
                 addr_buf1 <= (75 + y_counter) * 320 + (80*rest_measures + x_counter);
                 addr_buf2 <= addr_buf1;
                 addr_out <= addr_buf2;
-                storing_state <= (rest_measures == 4)? IDLE : REST;
+                
                 valid_note_buf1 <= 1;
                 valid_note_buf2 <= valid_note_buf1;
                 valid_note_out <= valid_note_buf2;
-                for (int i = 0; i < 5; i ++) begin
-                    note_memory[i][current_staff_cell] <= (current_staff_cell == 0 || current_staff_cell == 80 || current_staff_cell == 160 || current_staff_cell == 240)?
-                                                          12'hFFF : 12'hDFF; // F is whole rest, D is null value in memory
-                end
+                
+                x_out <= x_counter + 185;
+                x_out1 <= x_out;
+                x_out2 <= x_out1;
+
                 y_out <= 75 + y_counter;
                 y_out1 <= y_out;
                 y_out2 <= y_out1;
+
+                storing_state <= (rest_measures == 4)? IDLE : REST;
             end
             IDLE: begin
-                check[0] <= detected_note[0][11:8] == SIXTEENTH;
-                check[1] <= detected_note[0][11:8] != note_memory[0][start_staff_cell[0]][11:8];
-                check[2] <= already_drawn; //sixteenth_metronome <= (bpm >> 2);
-                check[3] <= detected_note[0][7:0] != 8'hFF;
-                
-                already_drawn <= (current_staff_cell != current_staff_cell_buf)? 0: already_drawn;
+                already_drawn <= (current_staff_cell_in != current_staff_cell_buf)? 0: already_drawn;
+
+                y_dot_buf <= y_dot_in;
+                y_stem_buf <= y_stem_in;
+                for (int i = 0; i <  5; i++) begin
+                    sharp_shift_buf[i] <= sharp_shift_in[i];
+                    rhythm_shift_buf[i] <= rhythm_shift_in[i];
+                    note_width_buf[i] <= note_width_in[i];
+                end
                 // if there is a note input, want to do something
-                if (detected_note[0][7:0] != 8'hFF && detected_note[0][11:8] != 0) begin
-                    num_pixels <= 0;
+                if (detected_note_in[0][7:0] != 8'hFF && detected_note_in[0][11:8] != 0 ||
+                    detected_note_in[1][7:0] != 8'hFF && detected_note_in[1][11:8] != 0 ||
+                    detected_note_in[2][7:0] != 8'hFF && detected_note_in[2][11:8] != 0 ||
+                    detected_note_in[3][7:0] != 8'hFF && detected_note_in[3][11:8] != 0 ||
+                    detected_note_in[4][7:0] != 8'hFF && detected_note_in[4][11:8] != 0
+                ) begin
                     // storing_state <= (notes_in[0][7:0] != 8'hFF)? NOTE : REST;
                     // If current note rhythm is not the same as the one stored at the start
 
                     // if there is a change in detected note, AND in this cell cycle nothing has been drawn yet
-                    if (((detected_note[0][11:8] != (note_memory[0][start_staff_cell[0]][11:8]) && detected_note[0][11:8] != SIXTEENTH) ||
-                        (detected_note[0][11:8] != (note_memory[0][current_staff_cell][11:8]) && detected_note[0][11:8] == SIXTEENTH)) && already_drawn == 0) begin // && already_drawn == 0
-                        storing_state <= NOTE;
-
+                    if (((detected_note_in[note_ind][11:8] != (note_memory[note_ind][start_staff_cell[note_ind]][11:8]) && detected_note_in[note_ind][11:8] != SIXTEENTH) ||
+                        (detected_note_in[note_ind][11:8] != (note_memory[note_ind][current_staff_cell_in][11:8]) && detected_note_in[note_ind][11:8] == SIXTEENTH)) && already_drawn == 0) begin // && already_drawn == 0
+                        note_change_valid <= note_change_valid || 1;
                         // If new note is SIXTEENTH, its the beginning of new note
                         // This occurs if note changes, or if it turns on/off, or if a new measure starts
-                        start_staff_cell[0] <= (detected_note[0][11:8] == SIXTEENTH)? current_staff_cell : start_staff_cell[0];
-                        x_start[0] <= (detected_note[0][11:8] == SIXTEENTH)? current_staff_cell * 5 : start_staff_cell[0] * 5;
-                        y_start[0] <= y_dot_buf[0] - STAFF_SHIFT;
+                        start_staff_cell[note_ind] <= (detected_note_in[note_ind][11:8] == SIXTEENTH)? current_staff_cell_in : start_staff_cell[note_ind];
+                        x_start[note_ind] <= (detected_note_in[note_ind][11:8] == SIXTEENTH)? current_staff_cell_in * 5 : start_staff_cell[note_ind] * 5;
+                        y_start[note_ind] <= y_dot_in[note_ind] - STAFF_SHIFT;
 
-                        if (detected_note[0][11:8] == SIXTEENTH) begin 
-                            note_memory[0][current_staff_cell][11:8] <= detected_note[0][11:8];
-                            note_memory[0][current_staff_cell][7:0] <= detected_note[0][7:0];
+                        if (detected_note_in[note_ind][11:8] == SIXTEENTH) begin 
+                            note_memory[note_ind][current_staff_cell_in][11:8] <= detected_note_in[note_ind][11:8];
+                            note_memory[note_ind][current_staff_cell_in][7:0] <= detected_note_in[note_ind][7:0];
                         // If just extending duration of any note
                         end else begin 
-                            note_memory[0][start_staff_cell[0]][11:8] <= detected_note[0][11:8];
-                            note_memory[0][start_staff_cell[0]][7:0] <= detected_note[0][7:0]; // store start to be able to break nulls
-                            note_memory[0][current_staff_cell_buf][11:8] <= NULL;
+                            note_memory[note_ind][start_staff_cell[note_ind]][11:8] <= detected_note_in[note_ind][11:8];
+                            note_memory[note_ind][start_staff_cell[note_ind]][7:0] <= detected_note_in[note_ind][7:0]; // store start to be able to break nulls
+                            note_memory[note_ind][current_staff_cell_in][11:8] <= NULL;
                         end
-                    // else you are waiting for either something to change, or for the next cell
-                    end else begin
-                        // storing_state <= TRACK;
-                        // start_staff_cell[0] <= current_staff_cell;
                     end
-                // else, no input note, don't really do anything
-                end else begin
-                    // start_staff_cell[0] <= current_staff_cell;
                 end
+                storing_state <= (note_ind == 4 && note_change_valid)? NOTE : IDLE;
+                note_ind <= (note_ind == 4)? 0 : note_ind + 1;
+
                 valid_note_buf1 <= 0;
                 valid_note_buf2 <= valid_note_buf1;
                 valid_note_out <= valid_note_buf2;
@@ -137,42 +201,57 @@ always_ff @(posedge clk_in) begin
                 addr_out <= addr_buf2;
             end
             NOTE: begin
-                // already_drawn <= 1;
-                // num_pixels <= num_pixels + 1;
-                x_counter <= (x_counter == note_width_buf2[0] - 1)? 0: x_counter + 1;
-                y_counter <= (x_counter == note_width_buf2[0] - 1)? (y_counter == 6)? 0: y_counter + 1 : y_counter;
-                // make a second x y counter for the entire hdmi screen separately; above is counter for image 
-                image_addr <= (y_counter + sharp_shift_buf2[0]) * 265 + (x_counter + rhythm_shift_buf2[0]); // white pixel at address 19874 - white out if no note
-                addr_buf1 <= (y_start[0] + y_counter) * 320 + (x_start[0] + x_counter);
+                note_change_valid <= 0;
+                already_drawn <= 1;
+                
+                note_ind <= (x_counter == (note_width_buf[note_ind] - 1) && y_counter == 6)? (note_ind == 4)? 0 : note_ind + 1: note_ind;
+                x_counter <= (x_counter == note_width_buf[note_ind] - 1)? 0: x_counter + 1;
+                y_counter <= (x_counter == note_width_buf[note_ind] - 1)? (y_counter == 6)? 0: y_counter + 1 : y_counter;
+                image_addr <= (y_counter + sharp_shift_buf[note_ind]) * 265 + (x_counter + rhythm_shift_buf[note_ind]); // white pixel at address 19874 - white out if no note
+                
+                addr_buf1 <= (y_start[note_ind] + y_counter) * 320 + (x_start[note_ind] + x_counter);
                 addr_buf2 <= addr_buf1;
                 addr_out <= addr_buf2;
-                storing_state <= (x_counter == (note_width_buf2[0] - 1) && y_counter == 6)? STEM : NOTE;
+                
                 valid_note_buf1 <= 1;
                 valid_note_buf2 <= valid_note_buf1;
                 valid_note_out <= valid_note_buf2;
-                y_out <= y_start[0] + y_counter;
+                
+                x_out <= x_start[note_ind] + x_counter;
+                x_out1 <= x_out;
+                x_out2 <= x_out1;
+                y_out <= y_start[note_ind] + y_counter;
                 y_out1 <= y_out;
                 y_out2 <= y_out1;
+
+                storing_state <= (note_ind == 4)? STEM : NOTE;
             end
             STEM: begin
-                // already_drawn <= 1;
-                // num_pixels <= num_pixels + 1;
-                x_counter <= (x_counter == note_width_buf3[0] - 1)? 0: x_counter + 1;
-                y_counter <= (x_counter == note_width_buf3[0] - 1)? (y_counter == 17)? 0: y_counter + 1 : y_counter;
-                // make a second x y counter for the entire hdmi screen separately; above is counter for image 
-                image_addr <= (note_memory[0][start_staff_cell[0]][3:0] < 5)? (14 + y_counter) * 265 + (x_counter + rhythm_shift_buf3[0]) :
-                                                                              (32 + y_counter) * 265 + (x_counter + rhythm_shift_buf3[0]); // white pixel at address 19874 - white out if no note
-                addr_buf1 <=  (note_memory[0][start_staff_cell[0]][3:0] < 5)? (y_stem[0] - 18 + y_counter - STAFF_SHIFT) * 320 + (x_start[0] + x_counter) :
-                                                                             (y_stem[0] + 7 + y_counter- STAFF_SHIFT) * 320 + (x_start[0] + x_counter);
+                already_drawn <= 1;
+                
+                note_ind <= (x_counter == (note_width_buf[note_ind] - 1) && y_counter == 17)? (note_ind == 4)? 0 : note_ind + 1: note_ind;
+                x_counter <= (x_counter == note_width_buf[note_ind] - 1)? 0: x_counter + 1;
+                y_counter <= (x_counter == note_width_buf[note_ind] - 1)? (y_counter == 17)? 0: y_counter + 1 : y_counter;
+                image_addr <= (note_memory[note_ind][start_staff_cell[note_ind]][3:0] < 5)? (14 + y_counter) * 265 + (x_counter + rhythm_shift_buf[note_ind]) :
+                                                                              (32 + y_counter) * 265 + (x_counter + rhythm_shift_buf[note_ind]); // white pixel at address 19874 - white out if no note
+                
+                addr_buf1 <=  (note_memory[note_ind][start_staff_cell[note_ind]][3:0] < 5)? (y_stem_buf[note_ind] - 18 + y_counter - STAFF_SHIFT) * 320 + (x_start[note_ind] + x_counter) :
+                                                                             (y_stem_buf[note_ind] + 7 + y_counter- STAFF_SHIFT) * 320 + (x_start[note_ind] + x_counter);
                 addr_buf2 <= addr_buf1;
                 addr_out <= addr_buf2;
-                storing_state <= (x_counter == (note_width_buf3[0] - 1) && y_counter == 17)? IDLE : STEM;
+                
                 valid_note_buf1 <= 1;
                 valid_note_buf2 <= valid_note_buf1;
                 valid_note_out <= valid_note_buf2;
-                y_out <= (note_memory[0][start_staff_cell[0]][3:0] < 5)? (y_stem[0] - 18 + y_counter- STAFF_SHIFT):(y_stem[0] + 7 + y_counter- STAFF_SHIFT);
+                
+                x_out <= (x_start[note_ind] + x_counter);
+                x_out1 <= x_out;
+                x_out2 <= x_out1;
+                y_out <= (note_memory[note_ind][start_staff_cell[note_ind]][3:0] < 5)? (y_stem_buf[note_ind] - 18 + y_counter- STAFF_SHIFT):(y_stem_buf[note_ind] + 7 + y_counter- STAFF_SHIFT);
                 y_out1 <= y_out;
                 y_out2 <= y_out1;
+
+                storing_state <= (note_ind == 4)? IDLE : STEM;
             end
         endcase
     end

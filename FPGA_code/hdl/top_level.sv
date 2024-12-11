@@ -332,6 +332,7 @@ module top_level (
 
    logic [1:0] set_bpm;
    logic [1:0] set_bpm_buf;
+   logic record_on;
    assign record_on = sw[0];
    assign set_bpm = sw[6:5];
    // sw == 00: don't set bpm
@@ -457,6 +458,7 @@ module top_level (
    logic [7:0] midi_velocity_record_out,midi_received_note_record_out;
    logic record_data_ready;
    logic record_data_midi_status;
+   logic valid_staff_record_out;
 
    midi_decode midi_decoder(
       .midi_Data_in(midi_data_in),
@@ -483,10 +485,10 @@ module top_level (
    // note that midi_burst will not always take BURST_DURATION CYCLES
    // If it receives 5 notes before BURST_DURATION CYCLES,
    // then it will output its data
-   midi_burst #(.BURST_DURATION(750_000)) note_collector(
+   midi_burst #(.BURST_DURATION(750_000)) note_collector (
       .midi_velocity_in((record_on)?midi_velocity_record_out:velocity_out),
       .midi_received_note_in((record_on)?midi_received_note_record_out:received_note_out),
-      .midi_channel_in(record_on)?0:channel_out),
+      .midi_channel_in((record_on)?0:channel_out),
       .midi_data_ready_in((record_on)?record_data_ready:midi_data_ready),
       .midi_status_in((record_on)?record_data_midi_status:midi_msg_type),
       .rst_in(sys_rst_camera),
@@ -638,10 +640,12 @@ module top_level (
          
          valid_draw_in = 1;
       end else begin
-         octave_draw_in = octave_count;
-         note_draw_in = note_value_array;
-         valid_draw_in = valid_sig_data;
-         note_on_draw_in = pwm_on_array;
+         for (int i = 0; i < 5; i++) begin
+            octave_draw_in[i] = octave_count[i];
+            note_draw_in[i] = note_value_array[i];
+            valid_draw_in = valid_sig_data;
+            note_on_draw_in[i] = pwm_on_array[i];
+         end
       end
    // 1 cycle
    end
@@ -658,45 +662,106 @@ module top_level (
       .durations_out(durations)
    );
    
-   logic [15:0] addra_note;
-   logic [15:0] note_mem;
-   logic [31:0] met_test;
-   logic [5:0] staff_cell;
-   logic [3:0] storing_state, storing_state_check;
 
-   logic [3:0] note_rhythms [4:0];
-   logic [4:0][5:0] start_staff_cell;
+   logic [5:0] current_staff_cell;
+    
+   logic [6:0] note_width[4:0];
+   logic [2:0] sharp_shift[4:0];
+   logic [7:0] rhythm_shift[4:0];
+    
+   logic [4:0][3:0] note_rhythms;
+   logic [7:0] notes_out [4:0];
+    
+   logic [4:0][8:0] y_dot1, y_dot2;
+   logic [8:0] y_stem1, y_stem2;
 
-   logic valid_note_pixel;
-   logic [11:0] detected_note [4:0];
-   logic [12:0] num_pixels;
-
-   logic [3:0] check;
-   logic [3:0] storing_state_out_test;
-
-   note_storing_run_it_back eom (
+   note_storing_position get_pos (
+      .rst_in(sys_rst_pixel),
       .clk_in(clk_100_passthrough),
-      .rst_in(sys_rst_camera),
       .bpm(bpm_buf),
-      .num_lines(1),
       .notes_in(notes),
       .durations_in(durations),
+      .current_staff_cell(current_staff_cell),
+      .note_width(note_width),
+      .sharp_shift(sharp_shift),
+      .rhythm_shift(rhythm_shift),
+      .note_rhythms(note_rhythms),
+      .notes_out(notes_out),
+      .y_dot_out(y_dot1),
+      .y_stem_out(y_stem1)
+   );
+
+   logic [11:0] detected_note_out [4:0];
+   logic [2:0] sharp_shift_out [4:0];
+   logic [7:0] rhythm_shift_out [4:0];
+   logic [6:0] note_width_out [4:0];
+   logic [5:0] current_staff_cell_out;
+
+   note_storing_change_detection get_det (
+      .rst_in(sys_rst_pixel),
+      .clk_in(clk_100_passthrough),
+      .y_dot_in(y_dot1),
+      .y_stem_in(y_stem1),
+      .sharp_shift_in(sharp_shift),
+      .rhythm_shift_in(rhythm_shift),
+      .note_width_in(note_width),
+      .current_staff_cell_in(current_staff_cell),
+      .notes_in(notes_out),
+      .note_rhythms_in(note_rhythms),
+      .detected_note_out(detected_note_out),
+      .y_dot_out(y_dot2),
+      .y_stem_out(y_stem2),
+      .sharp_shift_out(sharp_shift_out),
+      .rhythm_shift_out(rhythm_shift_out),
+      .note_width_out(note_width_out),
+      .current_staff_cell_out(current_staff_cell_out)
+   );
+
+   logic [15:0] addra_note;
+   logic [15:0] note_mem;
+   logic valid_note_pixel;
+
+
+   note_storing_pixel_addressing get_add (
+      .rst_in(sys_rst_pixel),
+      .clk_in(clk_100_passthrough),
+      .detected_note_in(detected_note_out),
+      .current_staff_cell_in(current_staff_cell_out),
+      .y_dot_in(y_dot2),
+      .y_stem_in(y_stem2),
+      .sharp_shift_in(sharp_shift_out),
+      .rhythm_shift_in(rhythm_shift_out),
+      .note_width_in(note_width_out),
       .addr_out(addra_note),
       .mem_out(note_mem),
       .valid_note_out(valid_note_pixel),
       .note_memory(note_memory),
-      .valid_staff_record_out(),
-      .sixteenth_metronome(met_test),
-      .current_staff_cell(),
-      .current_staff_cell_buf(staff_cell),
-      .storing_state_out(storing_state),
-      .storing_state_out_test(storing_state_out_test),
-      .note_rhythms(note_rhythms),
-      .start_staff_cell(start_staff_cell),
-      .detected_note(detected_note),
-      .num_pixels(num_pixels),
-      .check(check)
-  );
+      .valid_staff_record_out(valid_staff_record_out)
+   );
+
+//    note_storing_run_it_back eom (
+//       .clk_in(clk_100_passthrough),
+//       .rst_in(sys_rst_camera),
+//       .bpm(bpm_buf),
+//       .num_lines(1),
+//       .notes_in(notes),
+//       .durations_in(durations),
+//       .addr_out(addra_note),
+//       .mem_out(note_mem),
+//       .valid_note_out(valid_note_pixel),
+//       .note_memory(note_memory),
+//       .valid_staff_record_out(),
+//       .sixteenth_metronome(met_test),
+//       .current_staff_cell(),
+//       .current_staff_cell_buf(staff_cell),
+//       .storing_state_out(storing_state),
+//       .storing_state_out_test(storing_state_out_test),
+//       .note_rhythms(note_rhythms),
+//       .start_staff_cell(start_staff_cell),
+//       .detected_note(detected_note),
+//       .num_pixels(num_pixels),
+//       .check(check)
+//   );
 
    logic [15:0] addrb_bram;
    always_ff @(posedge clk_camera) begin
@@ -737,14 +802,14 @@ module top_level (
 
    always_ff @(posedge clk_camera)begin
       if (sys_rst_camera) begin
-         storing_state_check <= 0;
+         // storing_state_check <= 0;
          staff_val <= 1;
       end else begin
       // staff_pixel_buf <= staff_pixel;
          staff_val <= 1;
          // staff_val_buf <= staff_val;
          
-         storing_state_check <= storing_state_check + storing_state;
+         // storing_state_check <= storing_state_check + storing_state;
       end
 
    end
