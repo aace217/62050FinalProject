@@ -721,6 +721,7 @@ module top_level (
    logic [15:0] note_mem;
    logic valid_note_pixel;
 
+   logic [3:0] check;
 
    note_storing_pixel_addressing get_add (
       .rst_in(sys_rst_pixel),
@@ -736,7 +737,8 @@ module top_level (
       .mem_out(note_mem),
       .valid_note_out(valid_note_pixel),
       .note_memory(note_memory),
-      .valid_staff_record_out(valid_staff_record_out)
+      .valid_staff_record_out(valid_staff_record_out),
+      .check(check)
    );
 
 //    note_storing_run_it_back eom (
@@ -821,7 +823,7 @@ module top_level (
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
    // .val_in({durations[0][31:20], storing_state, notes[0],  2'b0, staff_cell}),
-   .val_in({3'b0, note_on_draw_in,3'b0, valid_draw_in, note_draw_in[4], note_draw_in[3], note_draw_in[2], note_draw_in[1], note_draw_in[0]}),
+   .val_in({4'b0, check, detected_note_out[4],detected_note_out[0]}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );
