@@ -602,6 +602,8 @@ module top_level (
 
    logic [7:0] notes [4:0];
    logic [31:0] durations [4:0];
+   logic [7:0] notes_buf [4:0];
+   logic [31:0] durations_buf [4:0];
    logic [11:0] note_memory [4:0][63:0];
 
    // testing with fake midi signals
@@ -675,12 +677,25 @@ module top_level (
    logic [4:0][8:0] y_dot1, y_dot2;
    logic [8:0] y_stem1, y_stem2;
 
+   always_ff @(posedge clk_100_passthrough) begin
+      notes_buf[0] <= notes[0];
+      notes_buf[1] <= notes[1];
+      notes_buf[2] <= notes[2];
+      notes_buf[3] <= notes[3];
+      notes_buf[4] <= notes[4];
+      durations_buf[0] <= durations[0];
+      durations_buf[1] <= durations[1];
+      durations_buf[2] <= durations[2];
+      durations_buf[3] <= durations[3];
+      durations_buf[4] <= durations[4];
+   end
+
    note_storing_position get_pos (
       .rst_in(sys_rst_pixel),
       .clk_in(clk_100_passthrough),
       .bpm(bpm_buf),
-      .notes_in(notes),
-      .durations_in(durations),
+      .notes_in(notes_buf),
+      .durations_in(durations_buf),
       .current_staff_cell(current_staff_cell),
       .note_width(note_width),
       .sharp_shift(sharp_shift),
@@ -721,7 +736,11 @@ module top_level (
    logic [15:0] note_mem;
    logic valid_note_pixel;
 
-   logic [3:0] check;
+// testing
+   logic [23:0] check;
+   logic [4:0] note_change_valid;
+
+   logic [4:0] storing_state_out;
 
    note_storing_pixel_addressing get_add (
       .rst_in(sys_rst_pixel),
@@ -738,7 +757,9 @@ module top_level (
       .valid_note_out(valid_note_pixel),
       .note_memory(note_memory),
       .valid_staff_record_out(valid_staff_record_out),
-      .check(check)
+      .check(check),
+      .note_change_valid(note_change_valid),
+      .storing_state_out(storing_state_out)
    );
 
 //    note_storing_run_it_back eom (
@@ -823,7 +844,7 @@ module top_level (
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
    // .val_in({durations[0][31:20], storing_state, notes[0],  2'b0, staff_cell}),
-   .val_in({4'b0, check, detected_note_out[4],detected_note_out[0]}),
+   .val_in({check,detected_note_out[0]}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );
