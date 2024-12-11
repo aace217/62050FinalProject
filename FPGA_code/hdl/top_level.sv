@@ -692,7 +692,7 @@ module top_level (
       .mem_out(note_mem),
       .valid_note_out(valid_note_pixel),
       .note_memory(note_memory),
-      .valid_staff_record_out(),
+      .valid_staff_record_out(valid_staff_record_out),
       .sixteenth_metronome(met_test),
       .current_staff_cell(),
       .current_staff_cell_buf(staff_cell),
