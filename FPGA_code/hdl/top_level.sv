@@ -622,23 +622,23 @@ module top_level (
 
    always_comb begin
       if (sw[7]) begin
-         note_on_draw_in[0] = (btn_clean)? 1 : 0;
+         note_on_draw_in[4] = (btn_clean)? 1 : 0;
          note_on_draw_in[1] = 0;
          note_on_draw_in[2] = (btn[2])? 1 : 0;
          note_on_draw_in[3] = (btn[3])? 1 : 0;
-         note_on_draw_in[4] = 0;
+         note_on_draw_in[0] = 0;
 
-         octave_draw_in[0] = (btn_clean)? 5 : 0;
+         octave_draw_in[4] = (btn_clean)? 5 : 0;
          octave_draw_in[1] = 0;
          octave_draw_in[2] = (btn[2])? 4 : 0;
          octave_draw_in[3] = (btn[3])? 4 : 0;
-         octave_draw_in[4] = 0;
+         octave_draw_in[0] = 0;
       
-         note_draw_in[0] = (btn_clean)? 2 : 0;
+         note_draw_in[4] = (btn_clean)? 2 : 0;
          note_draw_in[1] = 0;
          note_draw_in[2] = (btn[2])? 9 : 0;
          note_draw_in[3] = (btn[3])? 6 : 0;
-         note_draw_in[4] = 0;
+         note_draw_in[0] = 0;
          
          valid_draw_in = 1;
       end else begin
@@ -762,7 +762,7 @@ module top_level (
    (.clk_in(clk_100_passthrough),
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({durations[0][31:24], octave_draw_in[0], note_draw_in[0], 3'b0, note_on_out, 3'b0, note_on_draw_in[0]}),
+   .val_in({notes[4]}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );
