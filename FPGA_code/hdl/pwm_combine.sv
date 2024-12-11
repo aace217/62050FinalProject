@@ -182,7 +182,7 @@ module pwm_combine(
                         if(intermed_msg_count == 0)begin
                             // go back to idle if it is an empty message
                             combine_state <= IDLE;
-                            on_array_out <= 0;
+                            //on_array_out <= 0;
                         end else begin
                             combine_state <= PROCESSING_DATA;
                             calc_count <= 0;
