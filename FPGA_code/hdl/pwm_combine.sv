@@ -112,7 +112,7 @@ module pwm_combine(
                     pwm_data_ready_out <= 0;
                     //pwm_data_out <= reset_val;
                     mods_done <= 0;
-                    on_array_out <= 0;
+                    //on_array_out <= 0;
                     sample_rate_count <= 0;
                     smallest_cycle_wait_index_buf <= 0;
                     calc_count <= 0;
@@ -182,6 +182,7 @@ module pwm_combine(
                         if(intermed_msg_count == 0)begin
                             // go back to idle if it is an empty message
                             combine_state <= IDLE;
+                            on_array_out <= 0;
                         end else begin
                             combine_state <= PROCESSING_DATA;
                             calc_count <= 0;
