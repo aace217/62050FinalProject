@@ -72,16 +72,21 @@ logic [4:0][8:0] x_start;
 logic [4:0] [7:0] y_start; // c0 -> c8 leads to 336 possible y locations
 logic [8:0] x_counter, x_out, x_out1, x_out2; // can go up to 80 for notes
 logic [7:0] y_counter, y_out, y_out1, y_out2; // can go up to 7 for notes
-logic [2:0] note_ind;
+logic [2:0] note_ind, note_ind2, note_ind3, note_ind4;
 
 logic [15:0] addr_buf1, addr_buf2; 
 logic valid_note_buf1, valid_note_buf2;   
 
-logic [4:0] [7:0] y_dot_buf;
-logic [7:0]  y_stem_buf;
+logic [4:0] [7:0] y_dot_buf, y_dot_buf2, y_dot_buf3;
+logic [7:0]  y_stem_buf, y_stem_buf2, y_stem_buf3;
 logic [4:0] sharp_shift_buf [2:0];
+logic [4:0] sharp_shift_buf2 [2:0];
 logic [4:0] rhythm_shift_buf [7:0];
+logic [4:0] rhythm_shift_buf2 [7:0];
+logic [4:0] rhythm_shift_buf3 [7:0];
 logic [4:0] note_width_buf [6:0];
+logic [4:0] note_width_buf2 [6:0];
+logic [4:0] note_width_buf3 [6:0];
 logic [11:0] detected_note_buf [4:0];
 
 logic already_drawn;
@@ -203,31 +208,39 @@ always_ff @(posedge clk_in) begin
                 addr_out <= addr_buf2;
             end
             DETECTED: begin
-                note_ind <= (note_ind == 4)? 0 : note_ind + 1;
-                check = {detected_note_buf[note_ind],note_memory[note_ind][current_staff_cell_buf]};
+                y_dot_buf2 <= y_dot_buf;
+                y_stem_buf2 <= y_stem_buf;
+                for (int i = 0; i <  5; i++) begin
+                    sharp_shift_buf2[i] <= sharp_shift_buf[i];
+                    rhythm_shift_buf2[i] <= rhythm_shift_buf[i];
+                    note_width_buf2[i] <= note_width_buf[i];
+                end
+                
+                note_ind2 <= (note_ind2 == 4)? 0 : note_ind2 + 1;
+                check = {detected_note_buf[note_ind2],note_memory[note_ind2][current_staff_cell_buf]};
                 // if there is a change in detected note, AND in this cell cycle nothing has been drawn yet
-                if (((detected_note_buf[note_ind][11:8] != (note_memory[note_ind][start_staff_cell[note_ind]][11:8]) && detected_note_in[note_ind][11:8] != SIXTEENTH) ||
-                    (detected_note_buf[note_ind][11:8] != (note_memory[note_ind][current_staff_cell_buf][11:8]) && detected_note_in[note_ind][11:8] == SIXTEENTH)) && already_drawn == 0) begin // && already_drawn == 0
+                if (((detected_note_buf[note_ind2][11:8] != (note_memory[note_ind2][start_staff_cell[note_ind2]][11:8]) && detected_note_in[note_ind2][11:8] != SIXTEENTH) ||
+                    (detected_note_buf[note_ind2][11:8] != (note_memory[note_ind2][current_staff_cell_buf][11:8]) && detected_note_in[note_ind2][11:8] == SIXTEENTH)) && already_drawn == 0) begin // && already_drawn == 0
                     
-                    note_change_valid[note_ind] <= 1;
+                    note_change_valid[note_ind2] <= 1;
                     
                     // If new note is SIXTEENTH, its the beginning of new note
                     // This occurs if note changes, or if it turns on/off, or if a new measure starts
-                    start_staff_cell[note_ind] <= (detected_note_buf[note_ind][11:8] == SIXTEENTH)? current_staff_cell_buf : start_staff_cell[note_ind];
-                    x_start[note_ind] <= (detected_note_buf[note_ind][11:8] == SIXTEENTH)? current_staff_cell_buf * 5 : start_staff_cell[note_ind] * 5;
-                    y_start[note_ind] <= y_dot_in[note_ind] - STAFF_SHIFT;
+                    start_staff_cell[note_ind2] <= (detected_note_buf[note_ind2][11:8] == SIXTEENTH)? current_staff_cell_buf : start_staff_cell[note_ind2];
+                    x_start[note_ind2] <= (detected_note_buf[note_ind2][11:8] == SIXTEENTH)? current_staff_cell_buf * 5 : start_staff_cell[note_ind2] * 5;
+                    y_start[note_ind2] <= y_dot_in[note_ind2] - STAFF_SHIFT;
 
-                    if (detected_note_buf[note_ind][11:8] == SIXTEENTH) begin 
-                        note_memory[note_ind][current_staff_cell_buf][11:8] <= detected_note_buf[note_ind][11:8];
-                        note_memory[note_ind][current_staff_cell_buf][7:0] <= detected_note_buf[note_ind][7:0];
+                    if (detected_note_buf[note_ind2][11:8] == SIXTEENTH) begin 
+                        note_memory[note_ind2][current_staff_cell_buf][11:8] <= detected_note_buf[note_ind2][11:8];
+                        note_memory[note_ind2][current_staff_cell_buf][7:0] <= detected_note_buf[note_ind2][7:0];
                     // If just extending duration of any note
                     end else begin 
-                        note_memory[note_ind][start_staff_cell[note_ind]][11:8] <= detected_note_buf[note_ind][11:8];
-                        note_memory[note_ind][start_staff_cell[note_ind]][7:0] <= detected_note_buf[note_ind][7:0]; // store start to be able to break nulls
-                        note_memory[note_ind][current_staff_cell_buf][11:8] <= NULL;
+                        note_memory[note_ind2][start_staff_cell[note_ind2]][11:8] <= detected_note_buf[note_ind2][11:8];
+                        note_memory[note_ind2][start_staff_cell[note_ind2]][7:0] <= detected_note_buf[note_ind2][7:0]; // store start to be able to break nulls
+                        note_memory[note_ind2][current_staff_cell_buf][11:8] <= NULL;
                     end
                 end else begin
-                    note_change_valid[note_ind] <= 0;
+                    note_change_valid[note_ind2] <= 0;
                 end
                 
                 valid_note_buf1 <= 0;
@@ -236,59 +249,64 @@ always_ff @(posedge clk_in) begin
                 addr_buf2 <= addr_buf1;
                 addr_out <= addr_buf2;
 
-                storing_state <= (note_ind == 4)? (note_change_valid != 0)? NOTE : IDLE : DETECTED;
+                storing_state <= (note_ind2 == 4)? (note_change_valid != 0)? NOTE : IDLE : DETECTED;
             end
             NOTE: begin
+                y_stem_buf3 <= y_stem_buf2;
+                for (int i = 0; i <  5; i++) begin
+                    rhythm_shift_buf3[i] <= rhythm_shift_buf2[i];
+                    note_width_buf3[i] <= note_width_buf2[i];
+                end
                 already_drawn <= 1;
                 
-                note_ind <= (x_counter == (note_width_buf[note_ind] - 1) && y_counter == 6)? (note_ind == 4)? 0 : note_ind + 1: note_ind;
-                x_counter <= (x_counter == note_width_buf[note_ind] - 1)? 0: x_counter + 1;
-                y_counter <= (x_counter == note_width_buf[note_ind] - 1)? (y_counter == 6)? 0: y_counter + 1 : y_counter;
-                image_addr <= (y_counter + sharp_shift_buf[note_ind]) * 265 + (x_counter + rhythm_shift_buf[note_ind]); // white pixel at address 19874 - white out if no note
+                note_ind3 <= (x_counter == (note_width_buf2[note_ind3] - 1) && y_counter == 6)? (note_ind3 == 4)? 0 : note_ind3 + 1: note_ind3;
+                x_counter <= (x_counter == note_width_buf2[note_ind3] - 1)? 0: x_counter + 1;
+                y_counter <= (x_counter == note_width_buf2[note_ind3] - 1)? (y_counter == 6)? 0: y_counter + 1 : y_counter;
+                image_addr <= (y_counter + sharp_shift_buf2[note_ind3]) * 265 + (x_counter + rhythm_shift_buf2[note_ind3]); // white pixel at address 19874 - white out if no note
                 
-                addr_buf1 <= (y_start[note_ind] + y_counter) * 320 + (x_start[note_ind] + x_counter);
+                addr_buf1 <= (y_start[note_ind3] + y_counter) * 320 + (x_start[note_ind3] + x_counter);
                 addr_buf2 <= addr_buf1;
                 addr_out <= addr_buf2;
                 
-                valid_note_buf1 <= (note_change_valid[note_ind])? 1:0;
+                valid_note_buf1 <= (note_change_valid[note_ind3])? 1:0;
                 valid_note_buf2 <= valid_note_buf1;
                 valid_note_out <= valid_note_buf2;
                 
-                x_out <= x_start[note_ind] + x_counter;
+                x_out <= x_start[note_ind3] + x_counter;
                 x_out1 <= x_out;
                 x_out2 <= x_out1;
-                y_out <= y_start[note_ind] + y_counter;
+                y_out <= y_start[note_ind3] + y_counter;
                 y_out1 <= y_out;
                 y_out2 <= y_out1;
 
-                storing_state <= (x_counter == (note_width_buf[note_ind] - 1) && y_counter == 6 && note_ind == 4)? STEM : NOTE;
+                storing_state <= (x_counter == (note_width_buf2[note_ind3] - 1) && y_counter == 6 && note_ind3 == 4)? STEM : NOTE;
             end
             STEM: begin
-                already_drawn <= 1;
+                already_drawn <= 1;        
                 
-                note_ind <= (x_counter == (note_width_buf[note_ind] - 1) && y_counter == 17)? (note_ind == 4)? 0 : note_ind + 1: note_ind;
-                x_counter <= (x_counter == note_width_buf[note_ind] - 1)? 0: x_counter + 1;
-                y_counter <= (x_counter == note_width_buf[note_ind] - 1)? (y_counter == 17)? 0: y_counter + 1 : y_counter;
-                image_addr <= (note_memory[note_ind][start_staff_cell[note_ind]][3:0] < 5)? (14 + y_counter) * 265 + (x_counter + rhythm_shift_buf[note_ind]) :
-                                                                              (32 + y_counter) * 265 + (x_counter + rhythm_shift_buf[note_ind]); // white pixel at address 19874 - white out if no note
+                note_ind4 <= (x_counter == (note_width_buf3[note_ind4] - 1) && y_counter == 17)? (note_ind4 == 4)? 0 : note_ind4 + 1: note_ind4;
+                x_counter <= (x_counter == note_width_buf3[note_ind4] - 1)? 0: x_counter + 1;
+                y_counter <= (x_counter == note_width_buf3[note_ind4] - 1)? (y_counter == 17)? 0: y_counter + 1 : y_counter;
+                image_addr <= (note_memory[note_ind4][start_staff_cell[note_ind4]][3:0] < 5)? (14 + y_counter) * 265 + (x_counter + rhythm_shift_buf3[note_ind4]) :
+                                                                              (32 + y_counter) * 265 + (x_counter + rhythm_shift_buf3[note_ind4]); // white pixel at address 19874 - white out if no note
                 
-                addr_buf1 <=  (note_memory[note_ind][start_staff_cell[note_ind]][3:0] < 5)? (y_stem_buf[note_ind] - 18 + y_counter - STAFF_SHIFT) * 320 + (x_start[note_ind] + x_counter) :
-                                                                             (y_stem_buf[note_ind] + 7 + y_counter- STAFF_SHIFT) * 320 + (x_start[note_ind] + x_counter);
+                addr_buf1 <=  (note_memory[note_ind4][start_staff_cell[note_ind4]][3:0] < 5)? (y_stem_buf3[note_ind4] - 18 + y_counter - STAFF_SHIFT) * 320 + (x_start[note_ind4] + x_counter) :
+                                                                             (y_stem_buf3[note_ind4] + 7 + y_counter- STAFF_SHIFT) * 320 + (x_start[note_ind4] + x_counter);
                 addr_buf2 <= addr_buf1;
                 addr_out <= addr_buf2;
                 
-                valid_note_buf1 <= (note_change_valid[note_ind])? 1:0;
+                valid_note_buf1 <= (note_change_valid[note_ind4])? 1:0;
                 valid_note_buf2 <= valid_note_buf1;
                 valid_note_out <= valid_note_buf2;
                 
-                x_out <= (x_start[note_ind] + x_counter);
+                x_out <= (x_start[note_ind4] + x_counter);
                 x_out1 <= x_out;
                 x_out2 <= x_out1;
-                y_out <= (note_memory[note_ind][start_staff_cell[note_ind]][3:0] < 5)? (y_stem_buf[note_ind] - 18 + y_counter- STAFF_SHIFT):(y_stem_buf[note_ind] + 7 + y_counter- STAFF_SHIFT);
+                y_out <= (note_memory[note_ind4][start_staff_cell[note_ind4]][3:0] < 5)? (y_stem_buf3[note_ind4] - 18 + y_counter- STAFF_SHIFT):(y_stem_buf3[note_ind4] + 7 + y_counter- STAFF_SHIFT);
                 y_out1 <= y_out;
                 y_out2 <= y_out1;
 
-                storing_state <= (x_counter == (note_width_buf[note_ind] - 1) && y_counter == 17 && note_ind == 4)? IDLE : STEM;
+                storing_state <= (x_counter == (note_width_buf3[note_ind4] - 1) && y_counter == 17 && note_ind4 == 4)? IDLE : STEM;
             end
         endcase
     end
