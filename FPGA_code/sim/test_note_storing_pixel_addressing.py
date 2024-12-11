@@ -66,7 +66,7 @@ async def test_tmds(dut):
     await drive_data(dut,detected_note_list,current_staff_cell,
                      binary_string,y_stem,sharp_shift_list,rhythm_shift_list,
                      note_width_list)
-    await ClockCycles(dut.clk_in,100)
+    await ClockCycles(dut.clk_in,200000)
 
     
     

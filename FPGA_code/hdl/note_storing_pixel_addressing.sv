@@ -33,6 +33,14 @@ module note_storing_pixel_addressing(
 
 );
 
+logic [4:0][11:0] detected_note_test;
+always_comb begin
+    for (int i = 0; i < 5; i++) begin
+        detected_note_test[i] = detected_note_in[i];
+    end
+end
+
+
 // STORING PIXELS OF CORRESPONDING NOTES
 // this all needs to happen within 3_000_000_000 cycles
 
@@ -226,7 +234,7 @@ always_ff @(posedge clk_in) begin
                 addr_buf2 <= addr_buf1;
                 addr_out <= addr_buf2;
 
-                storing_state <= (note_ind == 4 && note_change_valid != 0)? NOTE : IDLE;
+                storing_state <= (note_ind == 4)? (note_change_valid != 0)? NOTE : IDLE : DETECTED;
             end
             NOTE: begin
                 already_drawn <= 1;
