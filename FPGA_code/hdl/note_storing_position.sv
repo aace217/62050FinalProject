@@ -4,28 +4,31 @@
 module note_storing_position(
     input wire rst_in,
     input wire clk_in,
+    
     input wire [7:0] bpm,
     input wire  [7:0] notes_in [4:0],
     input wire  [31:0] durations_in[4:0],
     output logic [5:0] current_staff_cell,
     
-    output logic [4:0][6:0] note_width,
-    output logic [4:0][2:0] sharp_shift,
-    output logic [4:0][7:0] rhythm_shift,
+    output logic [6:0] note_width[4:0],
+    output logic [2:0] sharp_shift[4:0],
+    output logic [7:0] rhythm_shift[4:0],
     
-    output logic [3:0] note_rhythms [4:0],
-    output logic [3:0] notes_out [4:0],
+    output logic [4:0][3:0] note_rhythms ,
+    output logic [7:0] notes_out [4:0],
     
-    output logic [4:0][7:0] y_dot_out,
-    output logic [7:0] y_stem_out
+    output logic [4:0][8:0] y_dot_out,
+    output logic [8:0] y_stem_out
 );
 
 //________________________________________________________________________
 // SETTING UP METRONOME, BPM ON 16th NOTE 
 
+logic [31:0] sixteenth_metronome;
+
 always_ff @(posedge clk_in) begin
     if (rst_in) begin
-        sixteenth_metronome <= 1_499_999_999;
+        sixteenth_metronome <= 0;
         current_staff_cell <= 0;
     end else begin
         sixteenth_metronome <= (sixteenth_metronome + (bpm >> 2) >= 1_500_000_000)? 0 : sixteenth_metronome + (bpm >> 2);
@@ -67,15 +70,15 @@ always_ff @(posedge clk_in) begin
         end
     end else begin
         for (int i = 0; i < 5; i++) begin
-            notes_out <= notes_in;
-            sharp_shift[i] <= ((notes_in[7:4] == 1) || (notes_in[7:4] == 3) || 
-                                (notes_in[7:4] == 6) || (notes_in[7:4] == 8) || 
-                                (notes_in[7:4] == 10)) ? 7 : 0;
+            notes_out[i] <= notes_in[i];
+            sharp_shift[i] <= ((notes_in[i][7:4] == 1) || (notes_in[i][7:4] == 3) || 
+                                (notes_in[i][7:4] == 6) || (notes_in[i][7:4] == 8) || 
+                                (notes_in[i][7:4] == 10)) ? 7 : 0;
 
             if ((cycles_in[i] > 50_000) && (cycles_in[i] < 64'd1_300_000_000)) begin
                 note_rhythms[i] <= SIXTEENTH; // 5 bit dot
                 note_width[i] <= 5;
-                rhythm_shift[i] <= (note_memory[0][current_staff_cell[0]][3:0] < 5)? 0 : 5;
+                rhythm_shift[i] <= (notes_in[1][3:0] < 5)? 0 : 5;
             end else if ((cycles_in[i] >= 64'd1_300_000_000) && (cycles_in[i] < 64'd2_800_000_000)) begin
                 note_rhythms[i] <= EIGHTH; // 6 bit dot
                 note_width[i] <= 10;
@@ -117,8 +120,8 @@ end
 // ___________________________________________________________________________________ 
 // GET Y POSITION OF INPUT NOTE + STEM
 
-logic [4:0][7:0] y_dot, y_highest, y_lowest;
-logic [7:0] y_stem;
+logic [4:0][8:0] y_dot, y_highest, y_lowest;
+logic [8:0] y_stem;
 
 always_comb begin
     for (int i = 0; i < 5; i++) begin
@@ -141,12 +144,12 @@ always_comb begin
     if (y_dot[2] > y_highest) y_highest = y_dot[2];
     if (y_dot[3] > y_highest) y_highest = y_dot[3];
     if (y_dot[4] > y_highest) y_highest = y_dot[4];
-    if (y_dot[1] > y_lowest) y_lowest = y_dot[1];
-    if (y_dot[2] > y_lowest) y_lowest = y_dot[2];
-    if (y_dot[3] > y_lowest) y_lowest = y_dot[3];
-    if (y_dot[4] > y_lowest) y_lowest = y_dot[4];
+    if (y_dot[1] < y_lowest) y_lowest = y_dot[1];
+    if (y_dot[2] < y_lowest) y_lowest = y_dot[2];
+    if (y_dot[3] < y_lowest) y_lowest = y_dot[3];
+    if (y_dot[4] < y_lowest) y_lowest = y_dot[4];
     
-    if ((354 - y_highest) > y_lowest) begin // whichever one is closer to center
+    if ((354 - y_highest) >= y_lowest) begin // whichever one is closer to center
         y_stem = y_highest + 18;
     end else begin
         y_stem = y_lowest - 7;

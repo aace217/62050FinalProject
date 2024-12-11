@@ -4,17 +4,22 @@
 module note_storing_change_detection(
     input wire rst_in,
     input wire clk_in,
-    input logic [4:0] [7:0] y_dot_in,
-    input logic [7:0]  y_stem_in,
+    
+    input logic [4:0] [8:0] y_dot_in,
+    input logic [8:0]  y_stem_in,
+    
     input logic [4:0] sharp_shift_in [2:0],
     input logic [4:0] rhythm_shift_in [7:0],
     input logic [4:0] note_width_in [6:0],
+    
     input logic [5:0] current_staff_cell_in,
+    
     input logic [4:0] notes_in [7:0],
     input logic [3:0] note_rhythms_in [4:0],
+    
     output logic [11:0] detected_note_out [4:0],
-    output logic [4:0] [7:0] y_dot_out,
-    output logic [7:0]  y_stem_out,
+    output logic [4:0] [8:0] y_dot_out,
+    output logic [8:0]  y_stem_out,
     output logic [4:0] sharp_shift_out [2:0],
     output logic [4:0] rhythm_shift_out [7:0],
     output logic [4:0] note_width_out [6:0],
