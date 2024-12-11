@@ -15,8 +15,8 @@ module note_storing_pixel_addressing(
     input wire [11:0] detected_note_in [4:0],
     input wire [5:0] current_staff_cell_in,
     
-    input wire [4:0] [7:0] y_dot_in,
-    input wire [7:0]  y_stem_in,
+    input wire [4:0] [8:0] y_dot_in,
+    input wire [8:0]  y_stem_in,
     
     input wire [2:0] sharp_shift_in [4:0],
     input wire [7:0] rhythm_shift_in [4:0],
@@ -27,7 +27,9 @@ module note_storing_pixel_addressing(
     output logic valid_note_out,
     output logic [11:0] note_memory [4:0][63:0],
     output logic valid_staff_record_out,
-    output logic [3:0] check
+    output logic [23:0] check,
+    output logic [4:0] note_change_valid,
+    output logic [4:0] storing_state_out
 
 );
 
@@ -39,6 +41,8 @@ localparam STAFF_HEIGHT = 35;
 localparam [3:0] SIXTEENTH = 1;
 localparam [3:0] NULL = 13;
 enum logic [4:0] {INIT = 0, IDLE = 1, NOTE = 2, REST = 3, STEM = 4, SPLIT_NOTE = 5, DETECTED = 6} storing_state;
+
+assign storing_state_out = storing_state;
 
 logic [5:0] current_staff_cell_buf;
 
@@ -73,7 +77,6 @@ logic [11:0] detected_note_buf [4:0];
 logic already_drawn;
 
 logic [2:0] rest_measures;
-logic [4:0] note_change_valid;
 
 logic [4:0] start_staff_cell;
 
@@ -191,7 +194,7 @@ always_ff @(posedge clk_in) begin
             end
             DETECTED: begin
                 note_ind <= (note_ind == 4)? 0 : note_ind + 1;
-
+                check = {detected_note_buf[note_ind],note_memory[note_ind][current_staff_cell_in]};
                 // if there is a change in detected note, AND in this cell cycle nothing has been drawn yet
                 if (((detected_note_buf[note_ind][11:8] != (note_memory[note_ind][start_staff_cell[note_ind]][11:8]) && detected_note_in[note_ind][11:8] != SIXTEENTH) ||
                     (detected_note_buf[note_ind][11:8] != (note_memory[note_ind][current_staff_cell_in][11:8]) && detected_note_in[note_ind][11:8] == SIXTEENTH)) && already_drawn == 0) begin // && already_drawn == 0
@@ -237,7 +240,7 @@ always_ff @(posedge clk_in) begin
                 addr_buf2 <= addr_buf1;
                 addr_out <= addr_buf2;
                 
-                valid_note_buf1 <= (note_change_valid[note_ind])? 1:0;
+                valid_note_buf1 <= 1;//(note_change_valid[note_ind])? 1:0;
                 valid_note_buf2 <= valid_note_buf1;
                 valid_note_out <= valid_note_buf2;
                 
@@ -264,7 +267,7 @@ always_ff @(posedge clk_in) begin
                 addr_buf2 <= addr_buf1;
                 addr_out <= addr_buf2;
                 
-                valid_note_buf1 <= (note_change_valid[note_ind])? 1:0;
+                valid_note_buf1 <= 1;//(note_change_valid[note_ind])? 1:0;
                 valid_note_buf2 <= valid_note_buf1;
                 valid_note_out <= valid_note_buf2;
                 
