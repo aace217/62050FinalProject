@@ -254,12 +254,12 @@ always_ff @(posedge clk_in) begin
     if (rst_in) begin
         detected_note[0] <= 12'h0FF;
         detected_refresh <= 0;
-    end else if (detected_refresh >= 64'd1_300_000_000 && notes_in[0] != 8'hFF) begin
+    end else if (detected_refresh >= 64'd700_000_000 && notes_in[0] != 8'hFF) begin
         detected_note[0] <= (detected_note[0][7:0] != {notes_in[0]})? {note_rhythms[0], notes_in[0]} : detected_note[0];
         detected_refresh <= 0;
     end else begin
         detected_note[0] <= 12'h0FF;
-        detected_refresh <= (detected_refresh > 64'd1_300_000_000)? detected_refresh:detected_refresh + (bpm >>2);
+        detected_refresh <= (detected_refresh > 64'd700_000_000)? detected_refresh:detected_refresh + (bpm >>2);
     end
     // end else if (current_staff_cell != current_staff_cell_buf) begin//(sixteenth_metronome == 2*(bpm >> 2)) begin
     //     detected_note[0] <= 12'h0FF;
@@ -364,7 +364,7 @@ always_ff @(posedge clk_in) begin
 
                     // if there is a change in detected note, AND in this cell cycle nothing has been drawn yet
                     if (((detected_note[0][11:8] != (note_memory[0][start_staff_cell[0]][11:8]) && detected_note[0][11:8] != SIXTEENTH) ||
-                        (detected_note[0][11:8] != (note_memory[0][current_staff_cell][11:8]) && detected_note[0][11:8] == SIXTEENTH)) && already_drawn == 0) begin // && already_drawn == 0
+                        (detected_note[0][11:8] != (note_memory[0][current_staff_cell][11:8]) && detected_note[0][11:8] == SIXTEENTH)) && detected_refresh == 0) begin // && already_drawn == 0
                         storing_state <= NOTE;
 
                         // If new note is SIXTEENTH, its the beginning of new note
