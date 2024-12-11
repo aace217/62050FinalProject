@@ -92,6 +92,7 @@ module pwm_combine(
             smallest_cycle_wait_index_buf <= 0;
             sample_rate_count <= 0;
             calc_count <= 0;
+            on_array_out <= 0;
             combine_state <= IDLE;
             for(int n = 0; n<5; n = n + 1)begin
                 octave_count[n] <= 0;
@@ -111,6 +112,7 @@ module pwm_combine(
                     pwm_data_ready_out <= 0;
                     //pwm_data_out <= reset_val;
                     mods_done <= 0;
+                    on_array_out <= 0;
                     sample_rate_count <= 0;
                     smallest_cycle_wait_index_buf <= 0;
                     calc_count <= 0;
