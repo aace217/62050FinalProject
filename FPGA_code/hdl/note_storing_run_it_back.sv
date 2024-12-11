@@ -114,7 +114,7 @@ assign sharp_shift[0] = (  (note_memory[0][start_staff_cell[0]][7:4] == 1) ||
 always_comb begin
     for (int i = 0; i < 5; i++) begin
         //(3/8)*CYCLES_PER_BEAT) = 4_500_000_000
-        if ((cycles_in[i] > 50_000) && (cycles_in[i] < 64'd1_300_000_000)) begin
+        if ((cycles_in[i] > 15_000) && (cycles_in[i] < 64'd1_300_000_000)) begin
             note_rhythms[i] = SIXTEENTH; // 5 bit dot
             note_width[i] = 5;
             rhythm_shift[i] = (note_memory[0][current_staff_cell[0]][3:0] < 5)? 0 : 5;
@@ -169,24 +169,9 @@ always_comb begin
     end
 end
 
-// find y based on pitch and octave!
-always_comb begin
-    for (int i = 0; i < 5; i++) begin
-        case (notes_in[i][7:4])
-            0,1: y_dot[i] = 0 + 6*7*(8 - notes_in[i][3:0]);  // C; 7 notes per octave, 6 vertical pixels per note
-            2,3: y_dot[i] = 18 + 6*7*(8 - notes_in[i][3:0]);  // D sharp; 7 notes per octave, 6 pixels per note
-            4: y_dot[i] = 15 + 6*7*(8 - notes_in[i][3:0]);  // E; 7 notes per octave, 6 pixels per note
-            5,6: y_dot[i] = 12 + 6*7*(8 - notes_in[i][3:0]);  // F; 7 notes per octave, 6 pixels per note  
-            7,8: y_dot[i] = 9 + 6*7*(8 - notes_in[i][3:0]);  // G; 7 notes per octave, 6 pixels per note        
-            9,10: y_dot[i] = 6 + 6*7*(8 - notes_in[i][3:0]);  // A; 7 notes per octave, 6 pixels per note          
-            11: y_dot[i] = 3 + 6*7*(8 - notes_in[i][3:0]);  // B; 7 notes per octave, 6 pixels per note        
-            default: y_dot[i] = 150;
-        endcase
-    end
-end
 
 logic [4:0][7:0] y_dot, y_dot_buf;
-logic [7:0] y_stem, y_stem_buf;
+logic [4:0][7:0] y_stem, y_stem_buf;
 
 // find the highest/lowest note in the chord
 logic [7:0] highest_note, lowest_note, extreme_note;
@@ -209,10 +194,26 @@ always_ff @(posedge clk_in) begin
     end
 end
 
+// find y based on pitch and octave!
+always_comb begin
+    for (int i = 0; i < 5; i++) begin
+        case (notes_in[i][7:4])
+            0,1: y_dot[i] = 0 + 6*7*(8 - notes_in[i][3:0]);  // C; 7 notes per octave, 6 vertical pixels per note
+            2,3: y_dot[i] = 18 + 6*7*(8 - notes_in[i][3:0]);  // D sharp; 7 notes per octave, 6 pixels per note
+            4: y_dot[i] = 15 + 6*7*(8 - notes_in[i][3:0]);  // E; 7 notes per octave, 6 pixels per note
+            5,6: y_dot[i] = 12 + 6*7*(8 - notes_in[i][3:0]);  // F; 7 notes per octave, 6 pixels per note  
+            7,8: y_dot[i] = 9 + 6*7*(8 - notes_in[i][3:0]);  // G; 7 notes per octave, 6 pixels per note        
+            9,10: y_dot[i] = 6 + 6*7*(8 - notes_in[i][3:0]);  // A; 7 notes per octave, 6 pixels per note          
+            11: y_dot[i] = 3 + 6*7*(8 - notes_in[i][3:0]);  // B; 7 notes per octave, 6 pixels per note        
+            default: y_dot[i] = 150;
+        endcase
+    end
+end
+
 always_comb begin
     case (extreme_note[7:4])
         0,1: y_stem = 0 + 6*7*(8 - extreme_note[3:0]);  // C; 7 notes per octave, 6 vertical pixels per note
-        2,3: y_stem  = 18 + 6*7*(8 - extreme_note[3:0]);  // D sharp; 7 notes per octave, 6 pixels per note
+        2,3: y_stem = 18 + 6*7*(8 - extreme_note[3:0]);  // D sharp; 7 notes per octave, 6 pixels per note
         4: y_stem = 15 + 6*7*(8 - extreme_note[3:0]);  // E; 7 notes per octave, 6 pixels per note
         5,6: y_stem = 12 + 6*7*(8 - extreme_note[3:0]);  // F; 7 notes per octave, 6 pixels per note  
         7,8: y_stem = 9 + 6*7*(8 - extreme_note[3:0]);  // G; 7 notes per octave, 6 pixels per note        
@@ -228,7 +229,6 @@ end
 
 localparam STAFF_SHIFT = 66; // top of staff is 141 when not shifted; want to be at 75: 141 - 66 = 75
 localparam STAFF_HEIGHT = 35;
-localparam STAFF_START = 75;
 enum logic [4:0] {INIT = 0, IDLE = 1, NOTE = 2, REST = 3, STEM = 4, SPLIT_NOTE = 5} storing_state;
 
 assign storing_state_out = storing_state;
@@ -247,17 +247,11 @@ logic [2:0] rest_measures;
 
 always_ff @(posedge clk_in) begin
     if (rst_in) begin
-        for (int i = 0; i < 5; i ++) begin
-            detected_note[i] <= 12'h0FF;
-        end
+        detected_note[0] <= 12'h0FF;
     end else if (current_staff_cell != current_staff_cell_buf) begin//(sixteenth_metronome == 2*(bpm >> 2)) begin
-        for (int i = 0; i < 5; i ++) begin
-            detected_note[i] <= 12'h0FF;
-        end
+        detected_note[0] <= 12'h0FF;
     end else begin//if (sixteenth_metronome <= (bpm >> 2) || (sixteenth_metronome >= 3*(bpm >> 2) && sixteenth_metronome + (bpm >> 2) < 1_500_000_000)) begin
-        for (int i = 0; i < 5; i ++) begin
-            detected_note[i] <= (detected_note[i][7:0] != {notes_in[i]})? {note_rhythms[i], notes_in[i]} : detected_note[i];
-        end
+        detected_note[0] <= (detected_note[0][7:0] != {notes_in[0]})? {note_rhythms[0], notes_in[0]} : detected_note[0];
     end
     // keep track of any changes between sixteenth_metronome <= (bpm >> 2) and sixteenth_metronome + (bpm >> 2) >= 1_500_000_000
     sharp_shift_buf1 <= sharp_shift;
@@ -437,7 +431,7 @@ xilinx_single_port_ram_read_first #(
   );
 
 
-assign mem_out = ((y_out2 == STAFF_START || y_out2 == STAFF_START+6 || y_out2 == STAFF_START+12 || y_out2 == STAFF_START+18 || y_out2 == STAFF_START+24) && (image_mem >= 8'h94))? 16'h0094 : {8'b0, image_mem};
+assign mem_out = ((y_out2 == 75 || y_out2 == 81 || y_out2 == 87 || y_out2 == 93 || y_out2 == 99) && (image_mem >= 8'h94))? 16'h0094 : {8'b0, image_mem};
 // assign mem_out = image_mem;
 
 endmodule
