@@ -175,6 +175,7 @@ module pwm_combine(
                     // add the number of sine waves that there are notes
                     start_sines <= 0;
                     calc_count <= 0;
+                    midi_data_parsed_ready_out <= 0;
                     if(midi_burst_change_in)begin
                         if(intermed_msg_count == 0)begin
                             // go back to idle if it is an empty message
