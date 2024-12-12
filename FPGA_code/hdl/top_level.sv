@@ -647,7 +647,7 @@ module top_level (
             note_draw_in[i] = note_value_array[i];
          end
 
-         note_on_draw_in = pwm_on_array;
+         note_on_draw_in = note_on_out;
          valid_draw_in = valid_sig_data;
       end
    // 1 cycle
