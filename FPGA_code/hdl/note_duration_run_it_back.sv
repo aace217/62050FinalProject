@@ -20,14 +20,14 @@ logic [4:0] prev_note_on;
 always_ff @(posedge clk_in) begin
     if (rst_in) begin
         for (int i = 0; i < 5; i ++) begin
-            notes_out[i] <= 0;
+            notes_out[i] <= 8'hFF;
             durations_out[i] <= 0;
-            prev_notes[i] <= 0;
+            prev_notes[i] <= 8'hFF;
             prev_octave[i] <= 0;
             prev_note_on[i] <= 0;
         end
     end else begin
-        if (valid_note_in) begin
+        // if (valid_note_in) begin
             for (int i = 0; i < 5; i ++) begin
                 prev_notes[i] <= note_value_array[i];
                 prev_octave[i] <= octave_count[i];
@@ -40,7 +40,17 @@ always_ff @(posedge clk_in) begin
                 // 15 is not a valid note pitch, 15 is also not a valid octave...
                 // thus, if note is NOT ON, then the note is represented by all 1's
             end
-        end 
+        // end else begin
+        //     for (int i = 0; i < 5; i ++) begin
+        //     notes_out[i] <= 8'hFF;
+        //     durations_out[i] <= 0;
+        //     prev_notes[i] <= 0;
+        //     prev_octave[i] <= 0;
+        //     prev_note_on[i] <= 0;
+        // end
+        // end
+        
+
     end
 end
 

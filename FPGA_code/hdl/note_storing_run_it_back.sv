@@ -316,7 +316,7 @@ always_ff @(posedge clk_in) begin
     end else begin
         case (storing_state) // all happens within the same current_staff_cell, hopefully
             INIT: begin
-                image_addr <= 9;// 19874; // 9
+                image_addr <=  19874; // 9
                 x_counter <= (x_counter == 319)? 0: x_counter + 1;
                 y_counter <= (x_counter == 319)? (y_counter == 179)? 0: y_counter + 1 : y_counter;
                 addr_buf1 <= (y_counter) * 320 + (x_counter);
@@ -400,7 +400,7 @@ always_ff @(posedge clk_in) begin
                 y_counter <= (x_counter == note_width_buf1[4])? (y_counter == 179)? 0: y_counter + 1 : y_counter;
 
                 image_addr <= 19874;
-                addr_buf1 <= (y_counter) * 320 + (x_counter);
+                addr_buf1 <= (y_counter) * 320 + (x_start_note[4] + x_counter);
                 addr_buf2 <= addr_buf1;
                 addr_out <= addr_buf2;
                 

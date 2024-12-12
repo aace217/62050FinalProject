@@ -762,7 +762,7 @@ module top_level (
    (.clk_in(clk_100_passthrough),
    .rst_in(sys_rst_camera),
    // .val_in({5'b0,camera_hcount, 6'b0, camera_vcount}),
-   .val_in({notes[4]}),
+   .val_in({note_on_out, 3'b0,pwm_on_array, notes[4]}),
    .cat_out(ss_c),
    .an_out({ss0_an, ss1_an})
    );
