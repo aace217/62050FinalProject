@@ -117,10 +117,10 @@ module pwm_combine(
                     smallest_cycle_wait_index_buf <= 0;
                     calc_count <= 0;
                     //good_data <= 0;
+                    valid_buf <= on_array_in;
                     if(midi_burst_change_in && intermed_msg_count != 0)begin
                         // there is valid data, capture it
                         msg_count <= intermed_msg_count;
-                        valid_buf <= on_array_in;
                         for(int j = 1; j<5; j = j + 1)begin
                             note_velocity_array[j] <= midi_burst_data_in[j][7:0];
                         end
